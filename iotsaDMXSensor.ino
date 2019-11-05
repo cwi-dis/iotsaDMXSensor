@@ -13,6 +13,7 @@
 #include "iotsaLed.h"
 #include "iotsaConfigFile.h"
 #include "iotsaDMX.h"
+#include "iotsaEstimote.h"
 
 // CHANGE: Add application includes and declarations here
 
@@ -27,12 +28,11 @@ IotsaOtaMod otaMod(application);
 #endif
 
 IotsaDMXMod dmxMod(application);
+IotsaEstimoteMod estimoteMod(application);
 
 // Standard setup() method, hands off most work to the application framework
 void setup(void){
-#if 0
-  pixelstripMod.setDMX(&dmxMod);
-#endif
+  estimoteMod.setDMX(&dmxMod);
   application.setup();
   application.serverSetup();
 }
