@@ -33,7 +33,6 @@ protected:
   void handler();
   String argument;
   BLEScan* pBLEScan;
-  uint32_t noScanBefore;
 };
 
 #endif

@@ -2,6 +2,16 @@
 #include "iotsaEstimote.h"
 #include "iotsaConfigFile.h"
 
+static bool isScanning;
+static uint32_t dontScanBefore;
+static bool continueScanning = false;
+
+static void scanCompleteCB(BLEScanResults results) {
+  dontScanBefore = millis() + 1000;
+  continueScanning = true;
+  isScanning = false;
+}
+
 #ifdef IOTSA_WITH_WEB
 void
 IotsaEstimoteMod::handler() {
@@ -32,7 +42,7 @@ void IotsaEstimoteMod::setup() {
   BLEDevice::init("");
   pBLEScan = BLEDevice::getScan(); //create new scan
   pBLEScan->setAdvertisedDeviceCallbacks(this);
-  noScanBefore = 0;
+  isScanning = false;
 #if 0
   pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
   pBLEScan->setInterval(100);
@@ -85,13 +95,16 @@ void IotsaEstimoteMod::setDMX(IotsaDMXMod *dmx) {
 }
 
 void IotsaEstimoteMod::loop() {
-  if (millis() > noScanBefore) {
+  if (!isScanning && millis() > dontScanBefore) {
     IFDEBUG IotsaSerial.print("SCAN ");
-    BLEScanResults foundDevices = pBLEScan->start(1, false);
+    isScanning = pBLEScan->start(1, scanCompleteCB, continueScanning);
+    IFDEBUG IotsaSerial.println("started");
+#if 0
     IFDEBUG IotsaSerial.print("Devices found: ");
     IFDEBUG IotsaSerial.println(foundDevices.getCount());
     pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
     noScanBefore = millis() + 2000;
+#endif
   }
 }
 
