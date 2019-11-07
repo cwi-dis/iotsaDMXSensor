@@ -116,6 +116,12 @@ void IotsaEstimoteMod::setDMX(IotsaDMXMod *dmx) {
 
 void IotsaEstimoteMod::loop() {
   if (!isScanning && millis() > dontScanBefore) {
+    if (allSensorsSeen) {
+      pBLEScan->clearResults();
+      continueScanning = false;
+      allSensorsSeen = false;
+      IFDEBUG IotsaSerial.print("RE");
+    }
     IFDEBUG IotsaSerial.print("SCAN ");
     isScanning = pBLEScan->start(1, scanCompleteCB, continueScanning);
     IFDEBUG IotsaSerial.println("started");
@@ -129,18 +135,25 @@ void IotsaEstimoteMod::loop() {
 }
 
 void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
-  IFDEBUG IotsaSerial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
+  //IFDEBUG IotsaSerial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
   std::string manufacturerDataString(advertisedDevice.getManufacturerData());
   uint8_t *manufacturerData = (uint8_t *)manufacturerDataString.data();
   uint8_t manufacturerDataLength = (uint8_t)manufacturerDataString.length();
   if (manufacturerDataLength < sizeof(NearableAdvertisement)) {
-    IFDEBUG IotsaSerial.println("Too short");
+    //IFDEBUG IotsaSerial.println("Too short");
     return;
   }
   NearableAdvertisement *adv = (NearableAdvertisement *)manufacturerData;
   if (adv->companyID != ID_ESTIMOTE) {
-    IFDEBUG IotsaSerial.println("Not estimote");
+    //IFDEBUG IotsaSerial.println("Not estimote");
     return;
   }
   IFDEBUG IotsaSerial.printf("Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", adv->nearableID[0], adv->nearableID[1], adv->nearableID[2], adv->nearableID[3], adv->nearableID[4], adv->nearableID[5], adv->nearableID[6], adv->nearableID[7], adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
+  if(true) {
+    allSensorsSeen = true;
+    pBLEScan->stop();
+    dontScanBefore = millis() + 50;
+    continueScanning = true;
+    isScanning = false;
+  }
 }

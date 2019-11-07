@@ -33,6 +33,7 @@ protected:
   void handler();
   String argument;
   BLEScan* pBLEScan;
+  bool allSensorsSeen;
 };
 
 #endif
