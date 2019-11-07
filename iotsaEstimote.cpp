@@ -2,6 +2,26 @@
 #include "iotsaEstimote.h"
 #include "iotsaConfigFile.h"
 
+#define ID_ESTIMOTE 0x015d
+
+#pragma pack(push, 1)
+typedef struct NearableAdvertisement {
+  uint16_t companyID;
+  uint8_t frameType;
+  uint8_t nearableID[8];
+  uint8_t hardwareVersion;
+  uint8_t firmwareVersion;
+  uint8_t tempLo;
+  uint8_t tempHi;
+  uint8_t voltageAndMoving;
+  int8_t xAccelleration;
+  int8_t yAccelleration;
+  int8_t zAccelleration;
+  uint8_t curMovementDuration;
+  uint8_t prevMovementDuration;
+} NearableAdvertisement;
+#pragma pack(pop)
+
 static bool isScanning;
 static uint32_t dontScanBefore;
 static bool continueScanning = false;
@@ -110,4 +130,17 @@ void IotsaEstimoteMod::loop() {
 
 void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
   IFDEBUG IotsaSerial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
+  std::string manufacturerDataString(advertisedDevice.getManufacturerData());
+  uint8_t *manufacturerData = (uint8_t *)manufacturerDataString.data();
+  uint8_t manufacturerDataLength = (uint8_t)manufacturerDataString.length();
+  if (manufacturerDataLength < sizeof(NearableAdvertisement)) {
+    IFDEBUG IotsaSerial.println("Too short");
+    return;
+  }
+  NearableAdvertisement *adv = (NearableAdvertisement *)manufacturerData;
+  if (adv->companyID != ID_ESTIMOTE) {
+    IFDEBUG IotsaSerial.println("Not estimote");
+    return;
+  }
+  IFDEBUG IotsaSerial.printf("Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", adv->nearableID[0], adv->nearableID[1], adv->nearableID[2], adv->nearableID[3], adv->nearableID[4], adv->nearableID[5], adv->nearableID[6], adv->nearableID[7], adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
 }
