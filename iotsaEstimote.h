@@ -4,13 +4,18 @@
 #include "iotsaApi.h"
 #include "iotsaDMX.h"
 
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+
 #ifdef IOTSA_WITH_API
 #define IotsaEstimoteModBaseMod IotsaApiMod
 #else
 #define IotsaEstimoteModBaseMod IotsaMod
 #endif
 
-class IotsaEstimoteMod : public IotsaEstimoteModBaseMod {
+class IotsaEstimoteMod : public IotsaEstimoteModBaseMod, public BLEAdvertisedDeviceCallbacks {
 public:
   using IotsaEstimoteModBaseMod::IotsaEstimoteModBaseMod;
   void setup();
@@ -18,6 +23,8 @@ public:
   void loop();
   String info();
   void setDMX(IotsaDMXMod *dmx);
+  // BLE callback
+  void onResult(BLEAdvertisedDevice advertisedDevice);
 protected:
   bool getHandler(const char *path, JsonObject& reply);
   bool putHandler(const char *path, const JsonVariant& request, JsonObject& reply);
@@ -25,6 +32,8 @@ protected:
   void configSave();
   void handler();
   String argument;
+  BLEScan* pBLEScan;
+  uint32_t noScanBefore;
 };
 
 #endif

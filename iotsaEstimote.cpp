@@ -28,6 +28,17 @@ String IotsaEstimoteMod::info() {
 
 void IotsaEstimoteMod::setup() {
   configLoad();
+
+  BLEDevice::init("");
+  pBLEScan = BLEDevice::getScan(); //create new scan
+  pBLEScan->setAdvertisedDeviceCallbacks(this);
+  noScanBefore = 0;
+#if 0
+  pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+  pBLEScan->setInterval(100);
+  pBLEScan->setWindow(99);  // less or equal setInterval value
+#endif
+
 }
 
 #ifdef IOTSA_WITH_API
@@ -74,4 +85,16 @@ void IotsaEstimoteMod::setDMX(IotsaDMXMod *dmx) {
 }
 
 void IotsaEstimoteMod::loop() {
+  if (millis() > noScanBefore) {
+    IFDEBUG IotsaSerial.print("SCAN ");
+    BLEScanResults foundDevices = pBLEScan->start(1, false);
+    IFDEBUG IotsaSerial.print("Devices found: ");
+    IFDEBUG IotsaSerial.println(foundDevices.getCount());
+    pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
+    noScanBefore = millis() + 2000;
+  }
+}
+
+void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
+  IFDEBUG IotsaSerial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
 }
