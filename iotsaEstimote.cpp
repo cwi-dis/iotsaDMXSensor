@@ -2,6 +2,8 @@
 #include "iotsaEstimote.h"
 #include "iotsaConfigFile.h"
 
+//
+// Definition of an Estimote Nearable advertisement packet
 #define ID_ESTIMOTE 0x015d
 
 #pragma pack(push, 1)
@@ -30,6 +32,14 @@ static void scanCompleteCB(BLEScanResults results) {
   dontScanBefore = millis() + 1000;
   continueScanning = true;
   isScanning = false;
+}
+
+static void _hex2id(const String& hex, uint8_t *id) {
+
+}
+
+static void _id2hex(const uint8_t *id, String& hex) {
+
 }
 
 #ifdef IOTSA_WITH_WEB
@@ -73,15 +83,36 @@ void IotsaEstimoteMod::setup() {
 
 #ifdef IOTSA_WITH_API
 bool IotsaEstimoteMod::getHandler(const char *path, JsonObject& reply) {
-  reply["argument"] = argument;
+  JsonArray& ids = reply.createNestedArray("estimotes");
+  JsonArray& newIds = reply.createNestedArray("newEstimotes");
+  for (int i=0; i<nKnownEstimote+nNewEstimote; i++) {
+    String id;
+    _id2hex(estimotes[i].id, id);
+    if (i < nKnownEstimote) {
+      ids.add(id);
+    } else {
+      newIds.add(id);
+    }
+  }
   return true;
 }
 
 bool IotsaEstimoteMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply) {
   bool anyChanged = false;
   JsonObject& reqObj = request.as<JsonObject>();
-  if (reqObj.containsKey("argument")) {
-    argument = reqObj.get<String>("argument");
+  if (reqObj.containsKey("estimotes")) {
+    JsonArray& ids = reqObj.get<JsonArray>("estimotes");
+    if (estimotes) free(estimotes);
+    estimotes = NULL;
+    nKnownEstimote = nNewEstimote = 0;
+    nKnownEstimote = ids.size();
+    estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
+    for(int i=0; i<nKnownEstimote; i++) {
+      const String& id = ids[i];
+      _hex2id(id, estimotes[i].id);
+      estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
+      estimotes[i].seen = false;
+    }
     anyChanged = true;
   }
   if (anyChanged) configSave();
@@ -101,25 +132,99 @@ void IotsaEstimoteMod::serverSetup() {
 
 void IotsaEstimoteMod::configLoad() {
   IotsaConfigFileLoad cf("/config/estimote.cfg");
-  cf.get("argument", argument, "");
- 
+  if (estimotes) {
+    free((void *)estimotes);
+    estimotes = NULL;
+  }
+  nKnownEstimote = 0;
+  nNewEstimote = 0;
+  cf.get("nEstimote", nKnownEstimote, 0);
+  estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
+  if (estimotes == NULL) {
+    IotsaSerial.println("out of memory");
+    return;
+  }
+  for(int i=0; i<nNewEstimote; i++) {
+    String name = "id_" + String(i);
+    String byteString;
+    cf.get(name, byteString, "0000000000000000");
+    _hex2id(byteString, estimotes[i].id);
+    estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
+    estimotes[i].seen = false;
+  }
 }
 
 void IotsaEstimoteMod::configSave() {
   IotsaConfigFileSave cf("/config/estimote.cfg");
-  cf.put("argument", argument);
+  cf.put("nEstimote", nKnownEstimote);
+  struct Estimote *ep = estimotes;
+  for (int i=0; i<nKnownEstimote; i++) {
+    String name = "id_" + String(i);
+    String byteString;
+    _id2hex(ep->id, byteString);
+    cf.put(name, byteString);
+    ep++;
+  }
 }
 
 void IotsaEstimoteMod::setDMX(IotsaDMXMod *dmx) {
   
 }
 
+bool IotsaEstimoteMod::_allSensorsSeen() {
+  struct Estimote *ep = estimotes;
+  int n = nKnownEstimote;
+  while(n-- > 0) {
+    if (!ep->seen) return false;
+    ep++;
+  }
+  return true;
+}
+
+void IotsaEstimoteMod::_resetSensorsSeen() {
+  struct Estimote *ep = estimotes;
+  int n = nKnownEstimote;
+  while(n-- > 0) {
+    ep->seen = false;
+    ep++;
+  }
+}
+
+void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
+  struct Estimote *ep = estimotes;
+  int n = nKnownEstimote + nNewEstimote;
+  while(n-- > 0) {
+    if (memcmp(id, ep->id, 8) == 0) {
+      ep->seen = true;
+      ep->x = x;
+      ep->y = y;
+      ep->z = z;
+    }
+    ep++;
+  }
+  // A new Estimote we have not seen before.
+  nNewEstimote++;
+  n = nKnownEstimote + nNewEstimote;
+  ep = (struct Estimote *)realloc((void *)estimotes, n * sizeof(struct Estimote));
+  if (ep == NULL) {
+    IotsaSerial.println("out of memory");
+    return;
+  }
+  estimotes = ep;
+  ep = ep + (n-1);
+  memcpy(ep->id, id, 8);
+  ep->x = x;
+  ep->y = y;
+  ep->z = z;
+  ep->seen = true;
+}
+
 void IotsaEstimoteMod::loop() {
   if (!isScanning && millis() > dontScanBefore) {
-    if (allSensorsSeen) {
+    if (_allSensorsSeen()) {
       pBLEScan->clearResults();
       continueScanning = false;
-      allSensorsSeen = false;
+      _resetSensorsSeen();
       IFDEBUG IotsaSerial.print("RE");
     }
     IFDEBUG IotsaSerial.print("SCAN ");
@@ -149,8 +254,8 @@ void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
     return;
   }
   IFDEBUG IotsaSerial.printf("Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", adv->nearableID[0], adv->nearableID[1], adv->nearableID[2], adv->nearableID[3], adv->nearableID[4], adv->nearableID[5], adv->nearableID[6], adv->nearableID[7], adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
-  if(true) {
-    allSensorsSeen = true;
+  _sensorData(adv->nearableID, adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
+  if(_allSensorsSeen()) {
     pBLEScan->stop();
     dontScanBefore = millis() + 50;
     continueScanning = true;

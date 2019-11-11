@@ -15,9 +15,22 @@
 #define IotsaEstimoteModBaseMod IotsaMod
 #endif
 
+struct Estimote {
+  uint8_t id[8];
+  int8_t x, y, z;
+  bool seen;
+};
+
 class IotsaEstimoteMod : public IotsaEstimoteModBaseMod, public BLEAdvertisedDeviceCallbacks {
 public:
-  using IotsaEstimoteModBaseMod::IotsaEstimoteModBaseMod;
+  IotsaEstimoteMod(IotsaApplication &_app, IotsaAuthenticationProvider *_auth=NULL, bool early=false)
+  : IotsaEstimoteModBaseMod(_app, _auth, early),
+    pBLEScan(NULL),
+    nKnownEstimote(0),
+    nNewEstimote(0),
+    estimotes(NULL)
+  {}
+
   void setup();
   void serverSetup();
   void loop();
@@ -31,9 +44,14 @@ protected:
   void configLoad();
   void configSave();
   void handler();
+  bool _allSensorsSeen();
+  void _resetSensorsSeen();
+  void _sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z);
   String argument;
   BLEScan* pBLEScan;
-  bool allSensorsSeen;
+  int nKnownEstimote;
+  int nNewEstimote;
+  struct Estimote *estimotes;
 };
 
 #endif
