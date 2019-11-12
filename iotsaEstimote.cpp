@@ -35,11 +35,37 @@ static void scanCompleteCB(BLEScanResults results) {
 }
 
 static void _hex2id(const String& hex, uint8_t *id) {
-
+  const char *p = hex.c_str();
+  memset(id, 0, 8);
+  for(int i=0; i<8; i++) {
+    char c = *p++;
+    if (c == 0) break;
+    char c2 = *p++;
+    if (c2 == 0) break;
+    char v = 0;
+    if (isdigit(c)) {
+      v = (c-'0') << 4;
+    } else if (c >= 'A' && c <= 'F') {
+      v = (c-'A' + 10) << 4;
+    } else if (c >= 'a' && c <= 'f') {
+      v = (c-'a' + 10) << 4;
+    }
+    if (isdigit(c2)) {
+      v |= (c2-'0');
+    } else if (c2 >= 'A' && c2 <= 'F') {
+      v |= (c2-'A' + 10);
+    } else if (c2 >= 'a' && c2 <= 'f') {
+      v |= (c2-'a' + 10);
+    }
+    *id++ = v;
+  }
 }
 
 static void _id2hex(const uint8_t *id, String& hex) {
-
+  for (int i=0; i<8; i++) {
+    String c = String(id[i], HEX);
+    hex += c;
+  }
 }
 
 #ifdef IOTSA_WITH_WEB
@@ -199,13 +225,19 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       ep->x = x;
       ep->y = y;
       ep->z = z;
+      IFDEBUG IotsaSerial.printf("Estimote num=%d x=%d y=%d z=%d", (ep-estimotes), ep->x, ep->y, ep->z);
+      return;
     }
     ep++;
   }
   // A new Estimote we have not seen before.
   nNewEstimote++;
   n = nKnownEstimote + nNewEstimote;
-  ep = (struct Estimote *)realloc((void *)estimotes, n * sizeof(struct Estimote));
+  if (n == 1) {
+    ep = (struct Estimote *)malloc(sizeof(struct Estimote));
+  } else {
+    ep = (struct Estimote *)realloc((void *)estimotes, n * sizeof(struct Estimote));
+  }
   if (ep == NULL) {
     IotsaSerial.println("out of memory");
     return;
@@ -217,6 +249,7 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
   ep->y = y;
   ep->z = z;
   ep->seen = true;
+  IFDEBUG IotsaSerial.printf("New Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", ep->id[0], ep->id[1], ep->id[2], ep->id[3], ep->id[4], ep->id[5], ep->id[6], ep->id[7], ep->x, ep->y, ep->z);
 }
 
 void IotsaEstimoteMod::loop() {
