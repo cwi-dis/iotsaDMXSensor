@@ -72,22 +72,43 @@ static void _id2hex(const uint8_t *id, String& hex) {
 void
 IotsaEstimoteMod::handler() {
   bool anyChanged = false;
-  if( server->hasArg("argument")) {
+  if( server->hasArg("Clear")) {
     if (needsAuthentication()) return;
-    argument = server->arg("argument");
+    nKnownEstimote = nNewEstimote = 0;
+    if (estimotes) free(estimotes);
+    estimotes = NULL;
+    anyChanged = true;
+  }
+  if( server->hasArg("new")) {
+    String id = server->arg("new");
+    _hex2id(id, estimotes[nKnownEstimote].id);
+    nKnownEstimote++;
+    nNewEstimote = 0;
     anyChanged = true;
   }
   if (anyChanged) configSave();
 
   String message = "<html><head><title>Estimote module</title></head><body><h1>Estimote module</h1>";
-  message += "<form method='get'>Argument: <input name='argument' value='";
-  message += htmlEncode(argument);
-  message += "'><br><input type='submit'></form>";
+  message += "<form method='get'><input type='submit' value='Reload'></form>";
+  message += "<h2>Known Estimotes</h2><ol>";
+  for (int i=0; i<nKnownEstimote; i++) {
+    String id;
+    _id2hex(estimotes[i].id, id);
+    message += "<li>" + id + ", x=" + String(estimotes[i].x) + " y=" + String(estimotes[i].y) + " z=" + String(estimotes[i].z) + "</li>";
+  }
+  message += "</ol><form method='get'><input type='submit' name='Clear' value='Clear'></form>";
+
+  message += "<h2>Unknown Estimotes</h2><ul>";
+  for (int i=nKnownEstimote; i<nKnownEstimote+nNewEstimote; i++) {
+    String id;
+    _id2hex(estimotes[i].id, id);
+    message += "<li>" + id + "<form method='get'><input type='hidden' name='new' value='" + id + "'><input type='submit' value='Add' name='add'></form></li>";
+  }
   server->send(200, "text/html", message);
 }
 
 String IotsaEstimoteMod::info() {
-  String message = "<p>Built with estimote module. See <a href=\"/estimote\">/estimote</a> to change devices and settings.</p>";
+  String message = "<p>Built with estimote module. See <a href=\"/estimote\">/estimote</a> to change devices and settings or <a href=\"/api/estimote\">/api/estimote</a> for REST interface.</p>";
   return message;
 }
 #endif // IOTSA_WITH_WEB
