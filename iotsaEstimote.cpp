@@ -170,10 +170,14 @@ void IotsaEstimoteMod::configLoad() {
     IotsaSerial.println("out of memory");
     return;
   }
-  for(int i=0; i<nNewEstimote; i++) {
+  for(int i=0; i<nKnownEstimote; i++) {
     String name = "id_" + String(i);
     String byteString;
     cf.get(name, byteString, "0000000000000000");
+//    IFDEBUG IotsaSerial.print("load ");
+//    IFDEBUG IotsaSerial.print(name);
+//    IFDEBUG IotsaSerial.print(", value ");
+//    IFDEBUG IotsaSerial.println(byteString);
     _hex2id(byteString, estimotes[i].id);
     estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
     estimotes[i].seen = false;
@@ -188,6 +192,10 @@ void IotsaEstimoteMod::configSave() {
     String name = "id_" + String(i);
     String byteString;
     _id2hex(ep->id, byteString);
+//    IFDEBUG IotsaSerial.print("save ");
+//    IFDEBUG IotsaSerial.print(name);
+//    IFDEBUG IotsaSerial.print(", value ");
+//    IFDEBUG IotsaSerial.println(byteString);
     cf.put(name, byteString);
     ep++;
   }
