@@ -10,10 +10,10 @@
 #define IotsaDMXModBaseMod IotsaMod
 #endif
 
-class IotsaDMXHandler {
+class IotsaDMXOutputHandler {
 public:
-  virtual ~IotsaDMXHandler() {};
-  virtual void dmxCallback() = 0;
+  virtual ~IotsaDMXOutputHandler() {};
+  virtual void dmxOutputChanged() = 0;
 };
 
 class IotsaDMXMod : public IotsaDMXModBaseMod {
@@ -22,20 +22,26 @@ public:
   : IotsaDMXModBaseMod(app),
     buffer(NULL),
     count(0),
-    dmxHandler(NULL),
+    inputBuffer(NULL),
+    inputCount(0),
+    dmxOutputHandler(NULL),
     shortName(""),
     longName(""),
     network(0),
     subnet(0),
     universe(0),
     firstIndex(0),
+    inputIndex(-1),
+    sendDMXPacket(false),
     udp()
   {}
   void setup();
   void serverSetup();
   void loop();
   String info();
-  void setHandler(uint8_t *_buffer, size_t _count, IotsaDMXHandler *_dmxHandler);
+  void setDMXOutputHandler(uint8_t *_buffer, size_t _count, IotsaDMXOutputHandler *_dmxHandler);
+  void setDMXInputHandler(uint8_t *_buffer, size_t _count, int inputIndex);
+  void dmxInputChanged();
 protected:
   bool getHandler(const char *path, JsonObject& reply);
   bool putHandler(const char *path, const JsonVariant& request, JsonObject& reply);
@@ -45,13 +51,17 @@ protected:
   void fillPollReply();
   uint8_t *buffer; 
   size_t count;
-  IotsaDMXHandler *dmxHandler;
+  uint8_t *inputBuffer;
+  size_t inputCount;
+  IotsaDMXOutputHandler *dmxOutputHandler;
   String shortName;
   String longName;
   int network;
   int subnet;
   int universe;
   int firstIndex;
+  int inputIndex;
+  bool sendDMXPacket;
   WiFiUDP udp;
 };
 

@@ -198,10 +198,17 @@ void IotsaDMXMod::configSave() {
   cf.put("firstIndex", firstIndex);
 }
 
-void IotsaDMXMod::setHandler(uint8_t *_buffer, size_t _count, IotsaDMXHandler *_dmxHandler) {
+void IotsaDMXMod::setDMXOutputHandler(uint8_t *_buffer, size_t _count, IotsaDMXOutputHandler *_dmxOutputHandler) {
   buffer = _buffer;
   count = _count;
-  dmxHandler = _dmxHandler;
+  dmxOutputHandler = _dmxOutputHandler;
+  fillPollReply();
+}
+
+void IotsaDMXMod::setDMXInputHandler(uint8_t *_buffer, size_t _count, int _inputIndex) {
+  inputBuffer = _buffer;
+  inputCount = _count;
+  inputIndex = _inputIndex;
   fillPollReply();
 }
 
@@ -227,11 +234,18 @@ void IotsaDMXMod::fillPollReply() {
   outPkt.pollReply.numPorts = ntohs(nPorts);
   memset(outPkt.pollReply.portType, 0, sizeof(outPkt.pollReply.portType));
   for (int i=0; i<nPorts; i++) {
-    outPkt.pollReply.portType[i] = 0x80;  // Artnet->DMX512
+    if (i == inputIndex) {
+      outPkt.pollReply.portType[i] = 0x40; // DMX512->Artnet
+    } else if (count && i <= count/512) {
+      outPkt.pollReply.portType[i] = 0x80;  // Artnet->DMX512
+    }
   }
   memset(outPkt.pollReply.inputStatus, 0, sizeof(outPkt.pollReply.inputStatus));
   memset(outPkt.pollReply.outputStatus, 0, sizeof(outPkt.pollReply.outputStatus));
   memset(outPkt.pollReply.inputPort, 0, sizeof(outPkt.pollReply.inputPort));
+  if (inputIndex > 0) {
+    outPkt.pollReply.inputPort[inputIndex] = universe + inputIndex;
+  }
   memset(outPkt.pollReply.outputPort, 0, sizeof(outPkt.pollReply.outputPort));
   for (int i=0; i<nPorts; i++) {
     outPkt.pollReply.outputPort[0] = universe+i;
@@ -242,6 +256,10 @@ void IotsaDMXMod::fillPollReply() {
   outPkt.pollReply.bindIndex=0;
   outPkt.pollReply.status2=0x09;
 
+}
+
+void IotsaDMXMod::dmxInputChanged() {
+  sendDMXPacket = true;
 }
 
 void IotsaDMXMod::loop() {
@@ -266,7 +284,7 @@ void IotsaDMXMod::loop() {
         IFDEBUG IotsaSerial.println(inPkt.data.universe);
         return;
       }
-      if (buffer == NULL || count == 0 || dmxHandler == NULL) {
+      if (buffer == NULL || count == 0 || dmxOutputHandler == NULL) {
         IFDEBUG IotsaSerial.println("Ignore data, no buffer/handler set");
       }
       bool anyChange = false;
@@ -281,7 +299,7 @@ void IotsaDMXMod::loop() {
       }
       if (anyChange) {
         IFDEBUG IotsaSerial.println("Data, and callback");
-        dmxHandler->dmxCallback();
+        dmxOutputHandler->dmxOutputChanged();
       }
     } else if (opcode == 0x2000) {
       IFDEBUG IotsaSerial.println("Poll packet");
@@ -294,5 +312,24 @@ void IotsaDMXMod::loop() {
       IFDEBUG IotsaSerial.print("Ignoring packet opcode=");
       IFDEBUG IotsaSerial.println(opcode, HEX);
     }
+  }
+  if (sendDMXPacket) {
+    // We re-use inPkt, we don't want to overwrite outPkt which has the poll reply.
+    memcpy(inPkt.ident, (const void *)"Art-Net", 8);
+    inPkt.opcode = 0x5000;
+    inPkt.data.universe = universe + inputIndex;
+    inPkt.data.physical = inputIndex;
+    inPkt.data.protocolVersion = htons(14);
+    inPkt.data.seq = 0;
+    inPkt.data.length = htons(inputCount);
+    memcpy(inPkt.data.data, inputBuffer, inputCount);
+    IPAddress subscribedHost(192, 168, 4, 2);
+    udp.beginPacket(subscribedHost, ARTNET_PORT);
+    size_t dataSize = sizeof(inPkt)-512+inputCount; 
+    udp.write((uint8_t *)&inPkt, dataSize);
+    udp.endPacket();
+    IFDEBUG IotsaSerial.printf("sent %d byte DMX packet\n", dataSize);
+    sendDMXPacket = false;
+    // xxxjack should also send periodically
   }
 }

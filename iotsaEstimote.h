@@ -28,14 +28,15 @@ public:
     pBLEScan(NULL),
     nKnownEstimote(0),
     nNewEstimote(0),
-    estimotes(NULL)
+    estimotes(NULL),
+    dmx(NULL)
   {}
 
   void setup();
   void serverSetup();
   void loop();
   String info();
-  void setDMX(IotsaDMXMod *dmx);
+  void setDMX(IotsaDMXMod *_dmx);
   // BLE callback
   void onResult(BLEAdvertisedDevice advertisedDevice);
 protected:
@@ -52,6 +53,8 @@ protected:
   int nKnownEstimote;
   int nNewEstimote;
   struct Estimote *estimotes;
+  IotsaDMXMod *dmx;
+  uint8_t sliderBuffer[512];
 };
 
 #endif

@@ -222,8 +222,9 @@ void IotsaEstimoteMod::configSave() {
   }
 }
 
-void IotsaEstimoteMod::setDMX(IotsaDMXMod *dmx) {
-  
+void IotsaEstimoteMod::setDMX(IotsaDMXMod *_dmx) {
+  dmx = _dmx;
+  dmx->setDMXInputHandler(sliderBuffer, 512, 0);
 }
 
 bool IotsaEstimoteMod::_allSensorsSeen() {
@@ -255,6 +256,14 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       ep->y = y;
       ep->z = z;
       IFDEBUG IotsaSerial.printf("Estimote num=%d x=%d y=%d z=%d", (ep-estimotes), ep->x, ep->y, ep->z);
+      int idx = ep-estimotes;
+      sliderBuffer[6*idx+0] = x > 0 ? x*2 : 0;
+      sliderBuffer[6*idx+1] = x < 0 ? -x*2 : 0;
+      sliderBuffer[6*idx+2] = y > 0 ? y*2 : 0;
+      sliderBuffer[6*idx+3] = y < 0 ? -y*2 : 0;
+      sliderBuffer[6*idx+4] = z > 0 ? z*2 : 0;
+      sliderBuffer[6*idx+5] = z < 0 ? -z*2 : 0;
+      if (dmx) dmx->dmxInputChanged();
       return;
     }
     ep++;
