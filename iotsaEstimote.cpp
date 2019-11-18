@@ -318,6 +318,8 @@ void IotsaEstimoteMod::loop() {
     }
     IFDEBUG IotsaSerial.print("SCAN ");
     isScanning = pBLEScan->start(1, scanCompleteCB, continueScanning);
+    pBLEScan->setInterval(150);
+    //pBLEScan->setWindow()
     IFDEBUG IotsaSerial.println("started");
 #if 0
     IFDEBUG IotsaSerial.print("Devices found: ");
