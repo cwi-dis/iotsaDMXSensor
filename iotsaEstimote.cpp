@@ -64,6 +64,8 @@ static void _hex2id(const String& hex, uint8_t *id) {
 static void _id2hex(const uint8_t *id, String& hex) {
   for (int i=0; i<8; i++) {
     String c = String(id[i], HEX);
+    // Grrr... Need to cater for leading zero
+    if (c.length() == 1) c = "0" + c;
     hex += c;
   }
 }
