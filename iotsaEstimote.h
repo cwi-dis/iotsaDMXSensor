@@ -29,6 +29,7 @@ public:
     nKnownEstimote(0),
     nNewEstimote(0),
     estimotes(NULL),
+    wantToSendDMX(false),
     dmx(NULL)
   {}
 
@@ -53,6 +54,7 @@ protected:
   int nKnownEstimote;
   int nNewEstimote;
   struct Estimote *estimotes;
+  bool wantToSendDMX;
   IotsaDMXMod *dmx;
   uint8_t sliderBuffer[512];
 };

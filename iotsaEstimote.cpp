@@ -6,6 +6,11 @@
 // Definition of an Estimote Nearable advertisement packet
 #define ID_ESTIMOTE 0x015d
 
+// These two defines basically determine how the radio is split between BLE and WiFi usage
+
+//#define DURATION_SCAN 500
+#define DURATION_NOSCAN 180
+
 #pragma pack(push, 1)
 typedef struct NearableAdvertisement {
   uint16_t companyID;
@@ -29,7 +34,7 @@ static uint32_t dontScanBefore;
 static bool continueScanning = false;
 
 static void scanCompleteCB(BLEScanResults results) {
-  dontScanBefore = millis() + 1000;
+  dontScanBefore = millis() + DURATION_NOSCAN;
   continueScanning = true;
   isScanning = false;
 }
@@ -265,7 +270,13 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       sliderBuffer[6*idx+3] = y < 0 ? -y*2 : 0;
       sliderBuffer[6*idx+4] = z > 0 ? z*2 : 0;
       sliderBuffer[6*idx+5] = z < 0 ? -z*2 : 0;
+#if 1
+      // We do not tell the DMX module right away, because the radio is still
+      // use by BLE. We ensure we send next time through the loop.
+      wantToSendDMX = true;
+#else
       if (dmx) dmx->dmxInputChanged();
+#endif
       return;
     }
     ep++;
@@ -293,6 +304,11 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
 }
 
 void IotsaEstimoteMod::loop() {
+  if (!isScanning && wantToSendDMX) {
+    wantToSendDMX = false;
+    dmx->dmxInputChanged();
+    return;
+  }
   if (!isScanning && millis() > dontScanBefore) {
     if (_allSensorsSeen()) {
       pBLEScan->clearResults();
@@ -330,7 +346,7 @@ void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
   _sensorData(adv->nearableID, adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
   if(_allSensorsSeen()) {
     pBLEScan->stop();
-    dontScanBefore = millis() + 50;
+    dontScanBefore = millis() + DURATION_NOSCAN;
     continueScanning = true;
     isScanning = false;
   }
