@@ -308,7 +308,7 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
 }
 
 void IotsaEstimoteMod::loop() {
-  if (!isScanning && wantToSendDMX) {
+  if (/*!isScanning && */ wantToSendDMX) {
     wantToSendDMX = false;
     dmx->dmxInputChanged();
     return;
