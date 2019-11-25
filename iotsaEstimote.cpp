@@ -8,8 +8,8 @@
 
 // These two defines basically determine how the radio is split between BLE and WiFi usage
 
-//#define DURATION_SCAN 500
-#define DURATION_NOSCAN 180
+#define DURATION_SCAN 10  // Seconds
+#define DURATION_NOSCAN 180 // Milliseconds
 
 #pragma pack(push, 1)
 typedef struct NearableAdvertisement {
@@ -160,12 +160,14 @@ bool IotsaEstimoteMod::putHandler(const char *path, const JsonVariant& request, 
     estimotes = NULL;
     nKnownEstimote = nNewEstimote = 0;
     nKnownEstimote = ids.size();
-    estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
-    for(int i=0; i<nKnownEstimote; i++) {
-      const String& id = ids[i];
-      _hex2id(id, estimotes[i].id);
-      estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
-      estimotes[i].seen = false;
+    if (nKnownEstimote > 0) {
+      estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
+      for(int i=0; i<nKnownEstimote; i++) {
+        const String& id = ids[i];
+        _hex2id(id, estimotes[i].id);
+        estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
+        estimotes[i].seen = false;
+      }
     }
     anyChanged = true;
   }
@@ -193,22 +195,24 @@ void IotsaEstimoteMod::configLoad() {
   nKnownEstimote = 0;
   nNewEstimote = 0;
   cf.get("nEstimote", nKnownEstimote, 0);
-  estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
-  if (estimotes == NULL) {
-    IotsaSerial.println("out of memory");
-    return;
-  }
-  for(int i=0; i<nKnownEstimote; i++) {
-    String name = "id_" + String(i);
-    String byteString;
-    cf.get(name, byteString, "0000000000000000");
-//    IFDEBUG IotsaSerial.print("load ");
-//    IFDEBUG IotsaSerial.print(name);
-//    IFDEBUG IotsaSerial.print(", value ");
-//    IFDEBUG IotsaSerial.println(byteString);
-    _hex2id(byteString, estimotes[i].id);
-    estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
-    estimotes[i].seen = false;
+  if (nKnownEstimote > 0) {
+    estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
+    if (estimotes == NULL) {
+      IotsaSerial.println("out of memory");
+      return;
+    }
+    for(int i=0; i<nKnownEstimote; i++) {
+      String name = "id_" + String(i);
+      String byteString;
+      cf.get(name, byteString, "0000000000000000");
+  //    IFDEBUG IotsaSerial.print("load ");
+  //    IFDEBUG IotsaSerial.print(name);
+  //    IFDEBUG IotsaSerial.print(", value ");
+  //    IFDEBUG IotsaSerial.println(byteString);
+      _hex2id(byteString, estimotes[i].id);
+      estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
+      estimotes[i].seen = false;
+    }
   }
 }
 
@@ -262,7 +266,7 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       ep->x = x;
       ep->y = y;
       ep->z = z;
-      IFDEBUG IotsaSerial.printf("Estimote num=%d x=%d y=%d z=%d", (ep-estimotes), ep->x, ep->y, ep->z);
+      IFDEBUG IotsaSerial.printf("Estimote num=%d x=%d y=%d z=%d\n", (ep-estimotes), ep->x, ep->y, ep->z);
       int idx = ep-estimotes;
       sliderBuffer[6*idx+0] = x > 0 ? x*2 : 0;
       sliderBuffer[6*idx+1] = x < 0 ? -x*2 : 0;
@@ -317,7 +321,7 @@ void IotsaEstimoteMod::loop() {
       IFDEBUG IotsaSerial.print("RE");
     }
     IFDEBUG IotsaSerial.print("SCAN ");
-    isScanning = pBLEScan->start(1, scanCompleteCB, continueScanning);
+    isScanning = pBLEScan->start(DURATION_SCAN, scanCompleteCB, continueScanning);
     pBLEScan->setInterval(150);
     //pBLEScan->setWindow()
     IFDEBUG IotsaSerial.println("started");
@@ -344,9 +348,11 @@ void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
     //IFDEBUG IotsaSerial.println("Not estimote");
     return;
   }
+#if 0
   IFDEBUG IotsaSerial.printf("Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", adv->nearableID[0], adv->nearableID[1], adv->nearableID[2], adv->nearableID[3], adv->nearableID[4], adv->nearableID[5], adv->nearableID[6], adv->nearableID[7], adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
+#endif
   _sensorData(adv->nearableID, adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
-  if(_allSensorsSeen()) {
+  if(0 /*xxxjack*/ && _allSensorsSeen()) {
     pBLEScan->stop();
     dontScanBefore = millis() + DURATION_NOSCAN;
     continueScanning = true;

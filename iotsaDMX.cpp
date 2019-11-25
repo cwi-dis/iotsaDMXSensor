@@ -317,6 +317,7 @@ void IotsaDMXMod::loop() {
       }
       if (buffer == NULL || count == 0 || dmxOutputHandler == NULL) {
         IFDEBUG IotsaSerial.println("Ignore data, no buffer/handler set");
+        return;
       }
       bool anyChange = false;
       int nValues = ntohs(inPkt.data.length);
