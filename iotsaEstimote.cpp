@@ -274,13 +274,13 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       sliderBuffer[6*idx+3] = y < 0 ? -y*2 : 0;
       sliderBuffer[6*idx+4] = z > 0 ? z*2 : 0;
       sliderBuffer[6*idx+5] = z < 0 ? -z*2 : 0;
+      if (n < nKnownEstimote && dmx) {
 #if 1
-      // We do not tell the DMX module right away, because the radio is still
-      // use by BLE. We ensure we send next time through the loop.
-      wantToSendDMX = true;
+        dmx->dmxInputChanged();
 #else
-      if (dmx) dmx->dmxInputChanged();
+        wantToSendDMX = true;
 #endif
+      }
       return;
     }
     ep++;
@@ -308,11 +308,13 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
 }
 
 void IotsaEstimoteMod::loop() {
-  if (/*!isScanning && */ wantToSendDMX) {
+#if 0
+  if (!isScanning && wantToSendDMX) {
     wantToSendDMX = false;
     dmx->dmxInputChanged();
     return;
   }
+#endif
   if (!isScanning && millis() > dontScanBefore) {
     if (_allSensorsSeen()) {
       pBLEScan->clearResults();
