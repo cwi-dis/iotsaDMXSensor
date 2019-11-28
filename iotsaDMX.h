@@ -34,6 +34,7 @@ public:
     inputIndex(-1),
     sendDMXPacket(false),
     sendAddress(255,255,255,255),
+    packetSequence(0),
     udp()
   {}
   void setup();
@@ -64,6 +65,7 @@ protected:
   int inputIndex;
   bool sendDMXPacket;
   IPAddress sendAddress;
+  uint8_t packetSequence;
   WiFiUDP udp;
 };
 

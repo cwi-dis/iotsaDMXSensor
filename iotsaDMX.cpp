@@ -304,7 +304,7 @@ void IotsaDMXMod::loop() {
     inPkt.data.universe = universe + inputIndex;
     inPkt.data.physical = inputIndex;
     inPkt.data.protocolVersion = htons(14);
-    inPkt.data.seq = 0;
+    inPkt.data.seq = packetSequence++;
     inPkt.data.length = htons(inputCount);
     memcpy(inPkt.data.data, inputBuffer, inputCount);
     udp.beginPacket(sendAddress, ARTNET_PORT);
