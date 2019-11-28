@@ -8,8 +8,9 @@
 
 // These two defines basically determine how the radio is split between BLE and WiFi usage
 
-#define DURATION_SCAN 10  // Seconds
-#define DURATION_NOSCAN 180 // Milliseconds
+#define BLESCAN_MAX_DURATION 1  // Seconds
+#define BLESCAN_DURATION_AFTER_SUCCESS 100 // Milliseconds to continue scanning after a detection
+#define BLESCAN_DURATION_NOSCAN 180 // Milliseconds to not use the radio for BLE to allow WiFi
 
 #pragma pack(push, 1)
 typedef struct NearableAdvertisement {
@@ -29,13 +30,16 @@ typedef struct NearableAdvertisement {
 } NearableAdvertisement;
 #pragma pack(pop)
 
-static bool isScanning;
+#if 0
 static uint32_t dontScanBefore;
 static bool continueScanning = false;
+#endif
+static bool isScanning;
+static uint32_t sendDMXat;
+static uint32_t startScanAt;
 
 static void scanCompleteCB(BLEScanResults results) {
-  dontScanBefore = millis() + DURATION_NOSCAN;
-  continueScanning = true;
+  startScanAt = millis() + BLESCAN_DURATION_NOSCAN;
   isScanning = false;
 }
 
@@ -127,12 +131,10 @@ void IotsaEstimoteMod::setup() {
   pBLEScan = BLEDevice::getScan(); //create new scan
   pBLEScan->setAdvertisedDeviceCallbacks(this);
   isScanning = false;
-#if 0
+  startScanAt = millis() + BLESCAN_DURATION_NOSCAN;
   pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
-  pBLEScan->setInterval(100);
-  pBLEScan->setWindow(99);  // less or equal setInterval value
-#endif
-
+  pBLEScan->setInterval(155);
+  pBLEScan->setWindow(151);  // less or equal setInterval value
 }
 
 #ifdef IOTSA_WITH_API
@@ -275,11 +277,7 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       sliderBuffer[6*idx+4] = z > 0 ? z*2 : 0;
       sliderBuffer[6*idx+5] = z < 0 ? -z*2 : 0;
       if (n < nKnownEstimote && dmx) {
-#if 1
-        dmx->dmxInputChanged();
-#else
-        wantToSendDMX = true;
-#endif
+        sendDMXat = millis() + BLESCAN_DURATION_AFTER_SUCCESS;
       }
       return;
     }
@@ -315,24 +313,26 @@ void IotsaEstimoteMod::loop() {
     return;
   }
 #endif
-  if (!isScanning && millis() > dontScanBefore) {
-    if (_allSensorsSeen()) {
-      pBLEScan->clearResults();
-      continueScanning = false;
-      _resetSensorsSeen();
-      IFDEBUG IotsaSerial.print("RE");
+  //
+  // If we have a pending transmission we stop scanning (if we are scanning) to 
+  // free the radio, we prepare for sending the DMX packet and we schedule
+  // restart of the scan
+  //
+  if (sendDMXat != 0 && millis() > sendDMXat) {
+    if (isScanning) {
+      pBLEScan->stop();
+      isScanning = false;
+      startScanAt = millis() + BLESCAN_DURATION_NOSCAN;
     }
+    if (dmx) dmx->dmxInputChanged();
+    sendDMXat = 0;
+  }
+  if (!isScanning && millis() > startScanAt) {
+    pBLEScan->clearResults();
+    _resetSensorsSeen();
     IFDEBUG IotsaSerial.print("SCAN ");
-    isScanning = pBLEScan->start(DURATION_SCAN, scanCompleteCB, continueScanning);
-    pBLEScan->setInterval(150);
-    //pBLEScan->setWindow()
+    isScanning = pBLEScan->start(BLESCAN_MAX_DURATION, scanCompleteCB);
     IFDEBUG IotsaSerial.println("started");
-#if 0
-    IFDEBUG IotsaSerial.print("Devices found: ");
-    IFDEBUG IotsaSerial.println(foundDevices.getCount());
-    pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
-    noScanBefore = millis() + 2000;
-#endif
   }
 }
 
@@ -354,10 +354,4 @@ void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
   IFDEBUG IotsaSerial.printf("Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", adv->nearableID[0], adv->nearableID[1], adv->nearableID[2], adv->nearableID[3], adv->nearableID[4], adv->nearableID[5], adv->nearableID[6], adv->nearableID[7], adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
 #endif
   _sensorData(adv->nearableID, adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
-  if(0 /*xxxjack*/ && _allSensorsSeen()) {
-    pBLEScan->stop();
-    dontScanBefore = millis() + DURATION_NOSCAN;
-    continueScanning = true;
-    isScanning = false;
-  }
 }
