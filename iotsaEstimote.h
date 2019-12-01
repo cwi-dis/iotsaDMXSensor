@@ -36,7 +36,7 @@ public:
   void serverSetup();
   void loop();
   String info();
-  void setDMX(IotsaDMXMod *_dmx);
+  void setDMX(IotsaDMXMod *_dmx, int portIndex);
   // BLE callback
   void onResult(BLEAdvertisedDevice advertisedDevice);
 protected:

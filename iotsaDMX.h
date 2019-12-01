@@ -20,18 +20,19 @@ class IotsaDMXMod : public IotsaDMXModBaseMod {
 public:
   IotsaDMXMod(IotsaApplication& app)
   : IotsaDMXModBaseMod(app),
-    buffer(NULL),
-    count(0),
+    outputPort(-1),
+    outputFirstIndex(0),
+    outputBuffer(NULL),
+    outputCount(0),
+    dmxOutputHandler(NULL),
+
+    inputPort(-1),
     inputBuffer(NULL),
     inputCount(0),
-    dmxOutputHandler(NULL),
+
     shortName(""),
     longName(""),
-    network(0),
-    subnet(0),
-    universe(0),
-    firstIndex(0),
-    inputIndex(-1),
+    firstUniverse(0),
     sendDMXPacket(false),
     sendAddress(255,255,255,255),
     packetSequence(0),
@@ -41,8 +42,8 @@ public:
   void serverSetup();
   void loop();
   String info();
-  void setDMXOutputHandler(uint8_t *_buffer, size_t _count, IotsaDMXOutputHandler *_dmxHandler);
-  void setDMXInputHandler(uint8_t *_buffer, size_t _count, int inputIndex);
+  void setDMXOutputHandler(int outputPort, uint8_t *_buffer, size_t _count, IotsaDMXOutputHandler *_dmxHandler);
+  void setDMXInputHandler(int inputPort, uint8_t *_buffer, size_t _count);
   void dmxInputChanged();
 protected:
   bool getHandler(const char *path, JsonObject& reply);
@@ -51,18 +52,20 @@ protected:
   void configSave();
   void handler();
   void fillPollReply();
-  uint8_t *buffer; 
-  size_t count;
+
+  int outputPort;
+  int outputFirstIndex;
+  uint8_t *outputBuffer; 
+  size_t outputCount;
+  IotsaDMXOutputHandler *dmxOutputHandler;
+
+  int inputPort;
   uint8_t *inputBuffer;
   size_t inputCount;
-  IotsaDMXOutputHandler *dmxOutputHandler;
+
   String shortName;
   String longName;
-  int network;
-  int subnet;
-  int universe;
-  int firstIndex;
-  int inputIndex;
+  int firstUniverse;
   bool sendDMXPacket;
   IPAddress sendAddress;
   uint8_t packetSequence;

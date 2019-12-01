@@ -235,9 +235,9 @@ void IotsaEstimoteMod::configSave() {
   }
 }
 
-void IotsaEstimoteMod::setDMX(IotsaDMXMod *_dmx) {
+void IotsaEstimoteMod::setDMX(IotsaDMXMod *_dmx, int portIndex) {
   dmx = _dmx;
-  dmx->setDMXInputHandler(sliderBuffer, 512, 0);
+  dmx->setDMXInputHandler(portIndex, sliderBuffer, 512);
 }
 
 bool IotsaEstimoteMod::_allSensorsSeen() {

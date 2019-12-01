@@ -32,7 +32,7 @@ IotsaEstimoteMod estimoteMod(application);
 
 // Standard setup() method, hands off most work to the application framework
 void setup(void){
-  estimoteMod.setDMX(&dmxMod);
+  estimoteMod.setDMX(&dmxMod, 0); // Transmit sensor values as sliders on port 0
   application.setup();
   application.serverSetup();
 }

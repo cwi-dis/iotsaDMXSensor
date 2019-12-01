@@ -72,24 +72,14 @@ IotsaDMXMod::handler() {
     longName = server->arg("longName");
     anyChanged = true;
   }
-  if (server->hasArg("network")) {
-    if (needsAuthentication()) return;
-    network = server->arg("network").toInt();
-    anyChanged = true;
-  }
-  if (server->hasArg("subnet")) {
-    if (needsAuthentication()) return;
-    subnet = server->arg("subnet").toInt();
-    anyChanged = true;
-  }
   if (server->hasArg("universe")) {
     if (needsAuthentication()) return;
-    universe = server->arg("universe").toInt();
+    firstUniverse = server->arg("universe").toInt();
     anyChanged = true;
   }
   if (server->hasArg("firstIndex")) {
     if (needsAuthentication()) return;
-    firstIndex = server->arg("firstIndex").toInt();
+    outputFirstIndex = server->arg("firstIndex").toInt();
     anyChanged = true;
   }
   if (server->hasArg("sendAddress")) {
@@ -108,19 +98,26 @@ IotsaDMXMod::handler() {
   String message = "<html><head><title>Boilerplate module</title></head><body><h1>Boilerplate module</h1>";
   message += "<form method='get'>Short name: <input name='shortName' value='" + htmlEncode(shortName) + "'><br>";
   message += "Long name: <input name='longName' value='" + htmlEncode(longName) + "'><br>";
-  message += "DMX Network: <input name='network' value='" + String(network) + "'><br>";
-  message += "DMX Subnet: <input name='subnet' value='" + String(subnet) + "'><br>";
-  message += "DMX Universe: <input name='universe' value='" + String(universe) + "'><br>";
-  if (count) {
-    message += "Number of dimmers: " + String(count) + "<br>";
-    message += "Index of first dimmer within universe: <input name='firstIndex' value='" + String(firstIndex) + "'><br>";
+  message += "DMX Universe of first port: <input name='universe' value='" + String(firstUniverse) + "'><br>";
+  int network = (firstUniverse >> 8) & 0x7f;
+  int subnet = (firstUniverse >> 4) & 0xf;
+  message += "(subsequent ports get consecutively numbered universes. Network "+String(network) +" and subnet " + String(subnet) + " are computed from universe)<br>";
+  if (outputCount) {
+    message += "Port number for dimmers: " + String(outputPort) + "<br>";
+    message += "Number of dimmers: " + String(outputCount) + "<br>";
+    message += "Universe(s) for dimmers: ";
+    for (int i=0; i<outputCount; i += 512) {
+      message += String(firstUniverse + (i/512)) + " ";
+    }
+    message += "<br>";
+    message += "Index of first dimmer within universe: <input name='firstIndex' value='" + String(outputFirstIndex) + "'><br>";
   } else {
     message += "(No DMX output ports registered by this iotsa device)<br>";
   }
   if (inputCount) {
     message += "Number of sliders: " + String(inputCount) + "<br>";
-    message += "Port number for sliders: " + String(firstIndex) + "<br>";
-    message += "Universe for sliders: " + String(universe+firstIndex) + "<br>";
+    message += "Port number for sliders: " + String(inputPort) + "<br>";
+    message += "Universe for sliders: " + String(firstUniverse+inputPort) + "<br>";
     message += "Transmission IP address: <input name='sendAddress' value='" + sendAddress.toString() + "'><br>";
   } else {
     message += "(No DMX input ports registered by this iotsa device)<br>";
@@ -144,10 +141,8 @@ void IotsaDMXMod::setup() {
 bool IotsaDMXMod::getHandler(const char *path, JsonObject& reply) {
   reply["shortName"] = shortName;
   reply["longName"] = longName;
-  reply["network"] = network;
-  reply["subnet"] = subnet;
-  reply["universe"] = universe;
-  reply["firstIndex"] = firstIndex;
+  reply["universe"] = firstUniverse;
+  reply["firstIndex"] = outputFirstIndex;
   reply["sendAddress"] = sendAddress.toString();
   return true;
 }
@@ -163,20 +158,12 @@ bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonO
     longName = reqObj.get<String>("longName");
     anyChanged = true;
   }
-  if (reqObj.containsKey("network")) {
-    network = reqObj.get<int>("network");
-    anyChanged = true;
-  }
-  if (reqObj.containsKey("subnet")) {
-    subnet = reqObj.get<int>("subnet");
-    anyChanged = true;
-  }
   if (reqObj.containsKey("universe")) {
-    universe = reqObj.get<int>("universe");
+    firstUniverse = reqObj.get<int>("universe");
     anyChanged = true;
   }
   if (reqObj.containsKey("firstIndex")) {
-    firstIndex = reqObj.get<int>("firstIndex");
+    outputFirstIndex = reqObj.get<int>("firstIndex");
     anyChanged = true;
   }
   if (reqObj.containsKey("sendAddress")) {
@@ -209,10 +196,8 @@ void IotsaDMXMod::configLoad() {
   IotsaConfigFileLoad cf("/config/dmx.cfg");
   cf.get("shortName", shortName, "iotsaDMXLedstrip");
   cf.get("longName", longName, "iotsaDMXLedstrip");
-  cf.get("network", network, 0);
-  cf.get("subnet", subnet, 0);
-  cf.get("universe", universe, 0);
-  cf.get("firstIndex", firstIndex, 0);
+  cf.get("universe", firstUniverse, 0);
+  cf.get("firstIndex", outputFirstIndex, 0);
   String addrStr;
   cf.get("sendAddress", addrStr, "255.255.255.255");
   sendAddress.fromString(addrStr);
@@ -222,24 +207,23 @@ void IotsaDMXMod::configSave() {
   IotsaConfigFileSave cf("/config/dmx.cfg");
   cf.put("shortName", shortName);
   cf.put("longName", longName);
-  cf.put("network", network);
-  cf.put("subnet", subnet);
-  cf.put("universe", universe);
-  cf.put("firstIndex", firstIndex);
+  cf.put("universe", firstUniverse);
+  cf.put("firstIndex", outputFirstIndex);
   cf.put("sendAddress", sendAddress.toString());
 }
 
-void IotsaDMXMod::setDMXOutputHandler(uint8_t *_buffer, size_t _count, IotsaDMXOutputHandler *_dmxOutputHandler) {
-  buffer = _buffer;
-  count = _count;
+void IotsaDMXMod::setDMXOutputHandler(int portIndex, uint8_t *_buffer, size_t _count, IotsaDMXOutputHandler *_dmxOutputHandler) {
+  outputBuffer = _buffer;
+  outputCount = _count;
   dmxOutputHandler = _dmxOutputHandler;
+  outputPort = portIndex;
   fillPollReply();
 }
 
-void IotsaDMXMod::setDMXInputHandler(uint8_t *_buffer, size_t _count, int _inputIndex) {
+void IotsaDMXMod::setDMXInputHandler(int portIndex, uint8_t *_buffer, size_t _count) {
   inputBuffer = _buffer;
   inputCount = _count;
-  inputIndex = _inputIndex;
+  inputPort = portIndex;
   fillPollReply();
 }
 
@@ -248,6 +232,8 @@ void IotsaDMXMod::fillPollReply() {
   if (ip == 0) {
   	ip = WiFi.softAPIP();
   }
+  int network = (firstUniverse >> 8) & 0x7f;
+  int subnet = (firstUniverse >> 4) & 0xf;
   outPkt.pollReply.ipaddr = ip;
   outPkt.pollReply.port=ARTNET_PORT;
   outPkt.pollReply.version=1;
@@ -261,26 +247,28 @@ void IotsaDMXMod::fillPollReply() {
   strncpy(outPkt.pollReply.longName, longName.c_str(), sizeof(outPkt.pollReply.longName));
   strncpy(outPkt.pollReply.report, "#0001 [0000] All is well", sizeof(outPkt.pollReply.report));
  
-  int nPorts = 1;
+  int firstOutputPort = outputPort;
+  int lastOutputPort = outputPort + (outputCount / 512);
+  int nPorts = lastOutputPort+1;
+  if (inputPort+1 > nPorts) nPorts = inputPort+1;
+  IotsaSerial.printf("xxxjack firstOutputPort=%d, lastOutputPort=%d, nPorts=%d\n", firstOutputPort, lastOutputPort, nPorts);
   outPkt.pollReply.numPorts = ntohs(nPorts);
   memset(outPkt.pollReply.portType, 0, sizeof(outPkt.pollReply.portType));
+  memset(outPkt.pollReply.inputPort, 0, sizeof(outPkt.pollReply.inputPort));
+  memset(outPkt.pollReply.outputPort, 0, sizeof(outPkt.pollReply.outputPort));
   for (int i=0; i<nPorts; i++) {
-    if (i == inputIndex) {
-      outPkt.pollReply.portType[i] = 0x40; // DMX512->Artnet
-    } else if (count && i <= count/512) {
-      outPkt.pollReply.portType[i] = 0x80;  // Artnet->DMX512
+    uint8_t portType = 0;
+    if (i == inputPort) {
+      portType |= 0x40; // DMX512->Artnet
+      outPkt.pollReply.inputPort[i] = (firstUniverse + i) & 0xf;
+    } else if (i >= firstOutputPort && i <= lastOutputPort) {
+      portType |= 0x80;  // Artnet->DMX512
+      outPkt.pollReply.outputPort[i] = (firstUniverse + i) & 0xf;
     }
+    outPkt.pollReply.portType[i] = portType;
   }
   memset(outPkt.pollReply.inputStatus, 0, sizeof(outPkt.pollReply.inputStatus));
   memset(outPkt.pollReply.outputStatus, 0, sizeof(outPkt.pollReply.outputStatus));
-  memset(outPkt.pollReply.inputPort, 0, sizeof(outPkt.pollReply.inputPort));
-  if (inputIndex >= 0) {
-    outPkt.pollReply.inputPort[inputIndex] = universe + inputIndex;
-  }
-  memset(outPkt.pollReply.outputPort, 0, sizeof(outPkt.pollReply.outputPort));
-  for (int i=0; i<nPorts; i++) {
-    outPkt.pollReply.outputPort[0] = universe+i;
-  }
 
   memset(outPkt.pollReply.mac, 0, sizeof(outPkt.pollReply.mac));
   outPkt.pollReply.bindip = ip;
@@ -301,8 +289,8 @@ void IotsaDMXMod::loop() {
     // We re-use inPkt, we don't want to overwrite outPkt which has the poll reply.
     memcpy(inPkt.ident, (const void *)"Art-Net", 8);
     inPkt.opcode = 0x5000;
-    inPkt.data.universe = universe + inputIndex;
-    inPkt.data.physical = inputIndex;
+    inPkt.data.universe = firstUniverse + inputPort;
+    inPkt.data.physical = inputPort;
     inPkt.data.protocolVersion = htons(14);
     inPkt.data.seq = packetSequence++;
     inPkt.data.length = htons(inputCount);
@@ -339,22 +327,23 @@ void IotsaDMXMod::loop() {
   }
   uint16_t opcode = inPkt.opcode;
   if (opcode == 0x5000) {
-    if (inPkt.data.universe != universe) {
+    if (inPkt.data.universe != firstUniverse) {
+      // xxxjack this is wrong. It doesn't allow for multiple ports...
       //IFDEBUG IotsaSerial.print("Ignore data for universe=");
       //IFDEBUG IotsaSerial.println(inPkt.data.universe);
       return;
     }
-    if (buffer == NULL || count == 0 || dmxOutputHandler == NULL) {
-      IFDEBUG IotsaSerial.println("Ignore data, no buffer/handler set");
+    if (outputBuffer == NULL || outputCount == 0 || dmxOutputHandler == NULL) {
+      IFDEBUG IotsaSerial.println("Ignore data, no output buffer/handler set");
       return;
     }
     bool anyChange = false;
     int nValues = ntohs(inPkt.data.length);
-    if ((int)count < nValues) nValues = count;
+    if ((int)outputCount < nValues) nValues = outputCount;
     IFDEBUG IotsaSerial.printf("xxxjack count=%d\r\n", nValues);
     for(int i=0; i<nValues; i++) {
-      if (inPkt.data.data[i] != buffer[i]) {
-        buffer[i] = inPkt.data.data[i];
+      if (inPkt.data.data[i] != outputBuffer[i]) {
+        outputBuffer[i] = inPkt.data.data[i];
         anyChange = true;
       }
     }
