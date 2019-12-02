@@ -4,6 +4,12 @@
 
 #define ARTNET_PORT 6454
 
+#ifndef ESP32
+// It seems that on the esp8266 udp.flush() actually does the same as endPacket(),
+// i.e. it writes out a packet (so it behaves like output flush, not input flush).
+#define UDP_FLUSH_IS_BROKEN
+#endif
+
 #pragma pack(push)
 #pragma pack(1)
 struct ArtnetPacket {
@@ -251,7 +257,6 @@ void IotsaDMXMod::fillPollReply() {
   int lastOutputPort = outputPort + (outputCount / 512);
   int nPorts = lastOutputPort+1;
   if (inputPort+1 > nPorts) nPorts = inputPort+1;
-  IotsaSerial.printf("xxxjack firstOutputPort=%d, lastOutputPort=%d, nPorts=%d\n", firstOutputPort, lastOutputPort, nPorts);
   outPkt.pollReply.numPorts = ntohs(nPorts);
   memset(outPkt.pollReply.portType, 0, sizeof(outPkt.pollReply.portType));
   memset(outPkt.pollReply.inputPort, 0, sizeof(outPkt.pollReply.inputPort));
@@ -308,16 +313,22 @@ void IotsaDMXMod::loop() {
   //
   size_t packetSize = udp.parsePacket();
   if (packetSize < ARTNET_MIN_PACKET_SIZE) {
+#ifndef UDP_FLUSH_IS_BROKEN
     udp.flush();
+#endif
     return;
   }
   if (packetSize > sizeof(inPkt)) packetSize = sizeof(inPkt);
   if (udp.read((char *)&inPkt, sizeof(inPkt)) != (int)packetSize) {
     IFDEBUG IotsaSerial.println("Ignoring incomplete packet");
+#ifndef UDP_FLUSH_IS_BROKEN
     udp.flush();
+#endif
     return;
   }
+#ifndef UDP_FLUSH_IS_BROKEN
   udp.flush();
+#endif
   if (strcmp(inPkt.ident, "Art-Net") != 0 || ntohs(inPkt.pollRequest.protocolVersion) != 14) {
     IFDEBUG IotsaSerial.print("Ignoring unknown packet, hdr=");
     IFDEBUG IotsaSerial.print(inPkt.ident);
@@ -340,7 +351,6 @@ void IotsaDMXMod::loop() {
     bool anyChange = false;
     int nValues = ntohs(inPkt.data.length);
     if ((int)outputCount < nValues) nValues = outputCount;
-    IFDEBUG IotsaSerial.printf("xxxjack count=%d\r\n", nValues);
     for(int i=0; i<nValues; i++) {
       if (inPkt.data.data[i] != outputBuffer[i]) {
         outputBuffer[i] = inPkt.data.data[i];
