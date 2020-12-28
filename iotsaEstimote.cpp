@@ -196,6 +196,7 @@ void IotsaEstimoteMod::configLoad() {
   }
   nKnownEstimote = 0;
   nNewEstimote = 0;
+  // xxxjack should use object interface
   cf.get("nEstimote", nKnownEstimote, 0);
   if (nKnownEstimote > 0) {
     estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
