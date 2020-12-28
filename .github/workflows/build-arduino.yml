@@ -16,8 +16,7 @@ jobs:
     strategy:
       matrix:
         arduino-board-fqbn:
-        - esp8266:esp8266:nodemcuv2
-#        - esp32:esp32:esp32thing
+        - esp32:esp32:lolin32
       
     steps:
     - name: Checkout code
