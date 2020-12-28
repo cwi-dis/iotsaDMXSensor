@@ -20,8 +20,8 @@ jobs:
       include:
         - arduino-boards-fqbn: esp32:esp32:lolin32
           build-properties:
-          All:
-            build.partition=no_ota
+            All:
+              build.partition=no_ota
       
     steps:
     - name: Checkout code
