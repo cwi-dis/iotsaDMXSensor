@@ -19,7 +19,7 @@ jobs:
         - esp32:esp32:lolin32
         include:
           - arduino-boards-fqbn: esp32:esp32:lolin32
-            extra-arduino-cli-args: "--build-property build.partitions=no_ota"
+            extra-arduino-cli-args: "--build-property build.partitions=no_ota --build-property upload.maximum_size=2097152"
       
     steps:
     - name: Checkout code
