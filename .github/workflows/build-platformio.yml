@@ -28,7 +28,6 @@ jobs:
       matrix:
         board:
         - lolin32
-        - nodemcuv2
         - esp32thing
         build_flags: [""]
 
