@@ -43,6 +43,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
+    - name: Setup Arduino CLI
+      uses: arduino/setup-arduino-cli@v2
+
     - name: Install Arduino platforms and libraries
       run: |
         arduino-cli config init --overwrite
