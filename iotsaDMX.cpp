@@ -155,26 +155,26 @@ bool IotsaDMXMod::getHandler(const char *path, JsonObject& reply) {
 
 bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply) {
   bool anyChanged = false;
-  JsonObject& reqObj = request.as<JsonObject>();
+  JsonObject reqObj = request.as<JsonObject>();
   if (reqObj.containsKey("shortName")) {
-    shortName = reqObj.get<String>("shortName");
+    shortName = reqObj["shortName"].as<String>();
     anyChanged = true;
   }
   if (reqObj.containsKey("longName")) {
-    longName = reqObj.get<String>("longName");
+    longName = reqObj["longName"].as<String>();
     anyChanged = true;
   }
   if (reqObj.containsKey("universe")) {
-    firstUniverse = reqObj.get<int>("universe");
+    firstUniverse = reqObj["universe"];
     anyChanged = true;
   }
   if (reqObj.containsKey("firstIndex")) {
-    outputFirstIndex = reqObj.get<int>("firstIndex");
+    outputFirstIndex = reqObj["firstIndex"];
     anyChanged = true;
   }
   if (reqObj.containsKey("sendAddress")) {
     IPAddress newAddr;
-    if (newAddr.fromString(reqObj.get<String>("sendAddress"))) {
+    if (newAddr.fromString(reqObj["sendAddress"].as<String>())) {
       sendAddress = newAddr;
       anyChanged = true;
     }

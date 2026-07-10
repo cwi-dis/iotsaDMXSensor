@@ -32,18 +32,18 @@ public:
     dmx(NULL)
   {}
 
-  void setup();
-  void serverSetup();
-  void loop();
-  String info();
+  void setup() override;
+  void serverSetup() override;
+  void loop() override;
+  String info() override;
   void setDMX(IotsaDMXMod *_dmx, int portIndex);
   // BLE callback
   void onResult(BLEAdvertisedDevice advertisedDevice);
 protected:
-  bool getHandler(const char *path, JsonObject& reply);
-  bool putHandler(const char *path, const JsonVariant& request, JsonObject& reply);
-  void configLoad();
-  void configSave();
+  bool getHandler(const char *path, JsonObject& reply) override;
+  bool putHandler(const char *path, const JsonVariant& request, JsonObject& reply) override;
+  void configLoad() override;
+  void configSave() override;
   void handler();
   bool _allSensorsSeen();
   void _resetSensorsSeen();
