@@ -101,7 +101,7 @@ IotsaDMXMod::handler() {
     fillPollReply();
   }
 
-  String message = "<html><head><title>Boilerplate module</title></head><body><h1>Boilerplate module</h1>";
+  String message = "<html><head><title>Art-Net DMX module</title></head><body><h1>Art-Net DMX module</h1>";
   message += "<form method='get'>Short name: <input name='shortName' value='" + htmlEncode(shortName) + "'><br>";
   message += "Long name: <input name='longName' value='" + htmlEncode(longName) + "'><br>";
   message += "DMX Universe of first port: <input name='universe' value='" + String(firstUniverse) + "'><br>";
@@ -156,23 +156,23 @@ bool IotsaDMXMod::getHandler(const char *path, JsonObject& reply) {
 bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply) {
   bool anyChanged = false;
   JsonObject reqObj = request.as<JsonObject>();
-  if (reqObj.containsKey("shortName")) {
+  if (reqObj["shortName"].is<String>()) {
     shortName = reqObj["shortName"].as<String>();
     anyChanged = true;
   }
-  if (reqObj.containsKey("longName")) {
+  if (reqObj["longName"].is<String>()) {
     longName = reqObj["longName"].as<String>();
     anyChanged = true;
   }
-  if (reqObj.containsKey("universe")) {
+  if (reqObj["universe"].is<int>()) {
     firstUniverse = reqObj["universe"];
     anyChanged = true;
   }
-  if (reqObj.containsKey("firstIndex")) {
+  if (reqObj["firstIndex"].is<int>()) {
     outputFirstIndex = reqObj["firstIndex"];
     anyChanged = true;
   }
-  if (reqObj.containsKey("sendAddress")) {
+  if (reqObj["sendAddress"].is<String>()) {
     IPAddress newAddr;
     if (newAddr.fromString(reqObj["sendAddress"].as<String>())) {
       sendAddress = newAddr;

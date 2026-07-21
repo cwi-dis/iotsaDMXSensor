@@ -139,8 +139,8 @@ void IotsaEstimoteMod::setup() {
 
 #ifdef IOTSA_WITH_API
 bool IotsaEstimoteMod::getHandler(const char *path, JsonObject& reply) {
-  JsonArray ids = reply.createNestedArray("estimotes");
-  JsonArray newIds = reply.createNestedArray("newEstimotes");
+  JsonArray ids = reply["estimotes"].to<JsonArray>();
+  JsonArray newIds = reply["newEstimotes"].to<JsonArray>();
   for (int i=0; i<nKnownEstimote+nNewEstimote; i++) {
     String id;
     _id2hex(estimotes[i].id, id);
@@ -156,7 +156,7 @@ bool IotsaEstimoteMod::getHandler(const char *path, JsonObject& reply) {
 bool IotsaEstimoteMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply) {
   bool anyChanged = false;
   JsonObject reqObj = request.as<JsonObject>();
-  if (reqObj.containsKey("estimotes")) {
+  if (reqObj["estimotes"].is<JsonArray>()) {
     JsonArray ids = reqObj["estimotes"];
     if (estimotes) free(estimotes);
     estimotes = NULL;
