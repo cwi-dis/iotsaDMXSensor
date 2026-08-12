@@ -38,11 +38,6 @@ static bool isScanning;
 static uint32_t sendDMXat;
 static uint32_t startScanAt;
 
-static void scanCompleteCB(BLEScanResults results) {
-  startScanAt = millis() + BLESCAN_DURATION_NOSCAN;
-  isScanning = false;
-}
-
 static void _hex2id(const String& hex, uint8_t *id) {
   const char *p = hex.c_str();
   memset(id, 0, 8);
@@ -129,7 +124,7 @@ void IotsaEstimoteMod::setup() {
 
   BLEDevice::init("");
   pBLEScan = BLEDevice::getScan(); //create new scan
-  pBLEScan->setAdvertisedDeviceCallbacks(this);
+  pBLEScan->setScanCallbacks(this);
   isScanning = false;
   startScanAt = millis() + BLESCAN_DURATION_NOSCAN;
   pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
@@ -332,14 +327,19 @@ void IotsaEstimoteMod::loop() {
     pBLEScan->clearResults();
     _resetSensorsSeen();
     IFDEBUG IotsaSerial.print("SCAN ");
-    isScanning = pBLEScan->start(BLESCAN_MAX_DURATION, scanCompleteCB);
+    isScanning = pBLEScan->start(BLESCAN_MAX_DURATION);
     IFDEBUG IotsaSerial.println("started");
   }
 }
 
-void IotsaEstimoteMod::onResult(BLEAdvertisedDevice advertisedDevice) {
-  //IFDEBUG IotsaSerial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
-  std::string manufacturerDataString(advertisedDevice.getManufacturerData());
+void IotsaEstimoteMod::onScanEnd(const NimBLEScanResults& scanResults, int reason) {
+  startScanAt = millis() + BLESCAN_DURATION_NOSCAN;
+  isScanning = false;
+}
+
+void IotsaEstimoteMod::onResult(const BLEAdvertisedDevice *advertisedDevice) {
+  //IFDEBUG IotsaSerial.printf("Advertised Device: %s \n", advertisedDevice->toString().c_str());
+  std::string manufacturerDataString(advertisedDevice->getManufacturerData());
   uint8_t *manufacturerData = (uint8_t *)manufacturerDataString.data();
   uint8_t manufacturerDataLength = (uint8_t)manufacturerDataString.length();
   if (manufacturerDataLength < sizeof(NearableAdvertisement)) {
