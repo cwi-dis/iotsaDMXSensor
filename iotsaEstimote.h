@@ -5,7 +5,8 @@
 #include "iotsaDMX.h"
 
 // NimBLEDevice.h sets up #define-based compat aliases (BLEDevice, BLEScan,
-// BLEAdvertisedDevice, etc. -> their Nim* equivalents). Including the old
+// BLEAdvertisedDevice, etc. -> their Nim* equivalents), which this file
+// deliberately doesn't use (see cwi-dis/iotsa#185). Including the old
 // legacy header names directly is ambiguous: depending on the toolchain,
 // they can resolve to the ESP32 core's own bundled (and here unwanted)
 // classic BLE library instead of NimBLE-Arduino.
@@ -40,7 +41,7 @@ public:
   String info() override;
   void setDMX(IotsaDMXMod *_dmx, int portIndex);
   // BLE scan callbacks
-  void onResult(const BLEAdvertisedDevice *advertisedDevice) override;
+  void onResult(const NimBLEAdvertisedDevice *advertisedDevice) override;
   void onScanEnd(const NimBLEScanResults& scanResults, int reason) override;
 protected:
   bool getHandler(const char *path, JsonObject& reply) override;
@@ -52,7 +53,7 @@ protected:
   void _resetSensorsSeen();
   void _sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z);
   String argument;
-  BLEScan* pBLEScan;
+  NimBLEScan* pBLEScan;
   int nKnownEstimote;
   int nNewEstimote;
   struct Estimote *estimotes;
