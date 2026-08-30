@@ -74,19 +74,18 @@ static void _id2hex(const uint8_t *id, String& hex) {
   }
 }
 
-#ifdef IOTSA_WITH_WEB
 void
-IotsaEstimoteMod::handler() {
+IotsaEstimoteMod::webHandler() {
   bool anyChanged = false;
-  if( server->hasArg("Clear")) {
+  if( api.webService->server->hasArg("Clear")) {
     if (needsAuthentication()) return;
     nKnownEstimote = nNewEstimote = 0;
     if (estimotes) free(estimotes);
     estimotes = NULL;
     anyChanged = true;
   }
-  if( server->hasArg("new")) {
-    String id = server->arg("new");
+  if( api.webService->server->hasArg("new")) {
+    String id = api.webService->server->arg("new");
     _hex2id(id, estimotes[nKnownEstimote].id);
     nKnownEstimote++;
     nNewEstimote = 0;
@@ -110,14 +109,13 @@ IotsaEstimoteMod::handler() {
     _id2hex(estimotes[i].id, id);
     message += "<li>" + id + "<form method='get'><input type='hidden' name='new' value='" + id + "'><input type='submit' value='Add' name='add'></form></li>";
   }
-  server->send(200, "text/html", message);
+  api.webService->server->send(200, "text/html", message);
 }
 
 String IotsaEstimoteMod::info() {
   String message = "<p>Built with estimote module. See <a href=\"/estimote\">/estimote</a> to change devices and settings or <a href=\"/api/estimote\">/api/estimote</a> for REST interface.</p>";
   return message;
 }
-#endif // IOTSA_WITH_WEB
 
 void IotsaEstimoteMod::setup() {
   configLoad();
@@ -132,7 +130,6 @@ void IotsaEstimoteMod::setup() {
   pBLEScan->setWindow(151);  // less or equal setInterval value
 }
 
-#ifdef IOTSA_WITH_API
 bool IotsaEstimoteMod::getHandler(const char *path, JsonObject& reply) {
   JsonArray ids = reply["estimotes"].to<JsonArray>();
   JsonArray newIds = reply["newEstimotes"].to<JsonArray>();
@@ -171,16 +168,10 @@ bool IotsaEstimoteMod::putHandler(const char *path, const JsonVariant& request, 
   if (anyChanged) configSave();
   return anyChanged;
 }
-#endif // IOTSA_WITH_API
 
-void IotsaEstimoteMod::serverSetup() {
-#ifdef IOTSA_WITH_WEB
-  server->on("/estimote", std::bind(&IotsaEstimoteMod::handler, this));
-#endif
-#ifdef IOTSA_WITH_API
-  api.setup("/api/estimote", true, true);
+void IotsaEstimoteMod::lateSetup() {
   name = "estimote";
-#endif
+  api.setup("estimote", true, true);
 }
 
 void IotsaEstimoteMod::configLoad() {

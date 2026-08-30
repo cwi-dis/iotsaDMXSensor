@@ -12,22 +12,16 @@
 // classic BLE library instead of NimBLE-Arduino.
 #include <NimBLEDevice.h>
 
-#ifdef IOTSA_WITH_API
-#define IotsaEstimoteModBaseMod IotsaApiMod
-#else
-#define IotsaEstimoteModBaseMod IotsaMod
-#endif
-
 struct Estimote {
   uint8_t id[8];
   int8_t x, y, z;
   bool seen;
 };
 
-class IotsaEstimoteMod : public IotsaEstimoteModBaseMod, public NimBLEScanCallbacks {
+class IotsaEstimoteMod : public IotsaModule, public NimBLEScanCallbacks {
 public:
   IotsaEstimoteMod(IotsaApplication &_app, IotsaAuthenticationProvider *_auth=NULL, bool early=false)
-  : IotsaEstimoteModBaseMod(_app, _auth, early),
+  : IotsaModule(_app, _auth, early),
     pBLEScan(NULL),
     nKnownEstimote(0),
     nNewEstimote(0),
@@ -36,7 +30,7 @@ public:
   {}
 
   void setup() override;
-  void serverSetup() override;
+  void lateSetup() override;
   void loop() override;
   String info() override;
   void setDMX(IotsaDMXMod *_dmx, int portIndex);
@@ -48,7 +42,7 @@ protected:
   bool putHandler(const char *path, const JsonVariant& request, JsonObject& reply) override;
   void configLoad() override;
   void configSave() override;
-  void handler();
+  void webHandler() override;
   bool _allSensorsSeen();
   void _resetSensorsSeen();
   void _sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z);
