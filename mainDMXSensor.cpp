@@ -4,14 +4,10 @@
 //
 
 #include "iotsa.h"
-#include "iotsaWifi.h"
-#include "iotsaOta.h"
 #include "iotsaDMX.h"
 #include "iotsaEstimote.h"
 
 IotsaApplication application("Iotsa DMX Sensor Server");
-IotsaWifiMod wifiMod(application);
-IotsaOtaMod otaMod(application);        // OTA firmware update
 
 IotsaDMXMod dmxMod(application);
 IotsaEstimoteMod estimoteMod(application);
