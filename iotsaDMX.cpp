@@ -150,7 +150,7 @@ bool IotsaDMXMod::getHandler(const char *path, JsonObject& reply) {
   return true;
 }
 
-bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply) {
+bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply, bool *changed) {
   bool anyChanged = false;
   JsonObject reqObj = request.as<JsonObject>();
   if (reqObj["shortName"].is<String>()) {
@@ -180,7 +180,8 @@ bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonO
     configSave();
     fillPollReply();
   }
-  return anyChanged;
+  if ((anyChanged) && changed) *changed = true;
+  return true;
 }
 
 void IotsaDMXMod::lateSetup() {
