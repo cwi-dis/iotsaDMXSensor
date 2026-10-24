@@ -40,11 +40,16 @@ public:
   void setDMXInputHandler(int inputPort, uint8_t *_buffer, size_t _count);
   void dmxInputChanged();
 protected:
-  bool getHandler(const char *path, JsonObject& reply) override;
-  bool putHandler(const char *path, const JsonVariant& request, JsonObject& reply, bool *changed = nullptr) override;
+  void getHandler(IotsaApiContext& ctx) override;
+  void putHandler(IotsaApiContext& ctx) override;
   void configLoad() override;
   void configSave() override;
-  void webHandler() override;
+#ifdef IOTSA_WITH_WEB
+  String webTitle() override { return "Art-Net DMX"; }
+  void formHandler_args(IotsaWebContext& ctx) override;
+  void formHandler_fields(IotsaWebContext& ctx) override;
+#endif
+  template<class Ctx> void _args(Ctx& ctx);
   void fillPollReply();
 
   int outputPort;

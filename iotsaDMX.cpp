@@ -64,72 +64,67 @@ struct ArtnetPacket outPkt = {
   .opcode=0x2100,
 };
 
-void
-IotsaDMXMod::webHandler() {
-  bool anyChanged = false;
-  if (api.webService->server->hasArg("shortName")) {
-    if (needsAuthentication()) return;
-    shortName = api.webService->server->arg("shortName");
-    anyChanged = true;
-  }
-  if (api.webService->server->hasArg("longName")) {
-    if (needsAuthentication()) return;
-    longName = api.webService->server->arg("longName");
-    anyChanged = true;
-  }
-  if (api.webService->server->hasArg("universe")) {
-    if (needsAuthentication()) return;
-    firstUniverse = api.webService->server->arg("universe").toInt();
-    anyChanged = true;
-  }
-  if (api.webService->server->hasArg("firstIndex")) {
-    if (needsAuthentication()) return;
-    outputFirstIndex = api.webService->server->arg("firstIndex").toInt();
-    anyChanged = true;
-  }
-  if (api.webService->server->hasArg("sendAddress")) {
-    IPAddress newSendAddress;
-    if (newSendAddress.fromString(api.webService->server->arg("sendAddress"))) {
-      sendAddress = newSendAddress;
-      anyChanged = true;
-    }
-  }
-
-  if (anyChanged) {
-    configSave();
-    fillPollReply();
-  }
-
-  String message = "<html><head><title>Art-Net DMX module</title></head><body><h1>Art-Net DMX module</h1>";
-  message += "<form method='get'>Short name: <input name='shortName' value='" + htmlEncode(shortName) + "'><br>";
-  message += "Long name: <input name='longName' value='" + htmlEncode(longName) + "'><br>";
-  message += "DMX Universe of first port: <input name='universe' value='" + String(firstUniverse) + "'><br>";
-  int network = (firstUniverse >> 8) & 0x7f;
-  int subnet = (firstUniverse >> 4) & 0xf;
-  message += "(subsequent ports get consecutively numbered universes. Network "+String(network) +" and subnet " + String(subnet) + " are computed from universe)<br>";
-  if (outputCount) {
-    message += "Port number for dimmers: " + String(outputPort) + "<br>";
-    message += "Number of dimmers: " + String(outputCount) + "<br>";
-    message += "Universe(s) for dimmers: ";
-    for (int i=0; i<outputCount; i += 512) {
-      message += String(firstUniverse + (i/512)) + " ";
-    }
-    message += "<br>";
-    message += "Index of first dimmer within universe: <input name='firstIndex' value='" + String(outputFirstIndex) + "'><br>";
-  } else {
-    message += "(No DMX output ports registered by this iotsa device)<br>";
-  }
-  if (inputCount) {
-    message += "Number of sliders: " + String(inputCount) + "<br>";
-    message += "Port number for sliders: " + String(inputPort) + "<br>";
-    message += "Universe for sliders: " + String(firstUniverse+inputPort) + "<br>";
-    message += "Transmission IP address: <input name='sendAddress' value='" + sendAddress.toString() + "'><br>";
-  } else {
-    message += "(No DMX input ports registered by this iotsa device)<br>";
-  }
-  message += "<input type='submit'></form>";
-  api.webService->server->send(200, "text/html", message);
+// How the device sits in the DMX network, the same on the page and in the
+// API. Changing it needs "dmx" (lateSetup()): it is operational, not how the
+// device is built. The names go into the Art-Net poll reply, which has room
+// for 17 and 63 characters.
+template<class Ctx> void IotsaDMXMod::_args(Ctx& ctx) {
+  String newShortName = shortName;
+  String newLongName = longName;
+  int newFirstIndex = outputFirstIndex;
+  String newSendAddress = sendAddress.toString();
+  bool changed = ctx.arg("shortName", newShortName, IotsaContext::Saved);
+  changed |= ctx.arg("longName", newLongName, IotsaContext::Saved);
+  changed |= ctx.arg("universe", firstUniverse, IotsaContext::Saved);
+  changed |= ctx.arg("firstIndex", newFirstIndex, IotsaContext::Saved);
+  bool addressChanged = ctx.arg("sendAddress", newSendAddress, IotsaContext::Saved);
+  IPAddress newAddr;
+  if (newShortName.length() > sizeof(outPkt.pollReply.shortName)-1) ctx.error(400, "shortName: at most 17 characters");
+  if (newLongName.length() > sizeof(outPkt.pollReply.longName)-1) ctx.error(400, "longName: at most 63 characters");
+  if (newFirstIndex < 0 || newFirstIndex > 511) ctx.error(400, "firstIndex: 0 to 511");
+  if (addressChanged && !newAddr.fromString(newSendAddress)) ctx.error(400, "sendAddress: an IP address");
+  if (ctx.failed()) return;
+  shortName = newShortName;
+  longName = newLongName;
+  outputFirstIndex = newFirstIndex;
+  if (addressChanged) sendAddress = newAddr;
+  if (changed || addressChanged) fillPollReply();
 }
+
+#ifdef IOTSA_WITH_WEB
+void IotsaDMXMod::formHandler_args(IotsaWebContext& ctx) {
+  _args(ctx);
+}
+
+void IotsaDMXMod::formHandler_fields(IotsaWebContext& ctx) {
+  if (ctx.includesEveryday()) {
+    int network = (firstUniverse >> 8) & 0x7f;
+    int subnet = (firstUniverse >> 4) & 0xf;
+    ctx.showStatus("Network and subnet", "", String(network) + ", " + String(subnet) + " (from the universe)");
+    if (outputCount) {
+      String universes;
+      for (size_t i=0; i<outputCount; i += 512) {
+        universes += String(firstUniverse + (i/512)) + " ";
+      }
+      ctx.showStatus("Dimmers", "", String(outputCount) + " on port " + String(outputPort) + ", universe(s) " + universes);
+    } else {
+      ctx.showStatus("Dimmers", "", "none: no DMX output ports on this device");
+    }
+    if (inputCount) {
+      ctx.showStatus("Sliders", "", String(inputCount) + " on port " + String(inputPort) + ", universe " + String(firstUniverse+inputPort));
+    } else {
+      ctx.showStatus("Sliders", "", "none: no DMX input ports on this device");
+    }
+    return;
+  }
+  IotsaWebContext::Form form(ctx);
+  ctx.showField("Short name", "shortName", shortName, IotsaWebContext::Saved, "at most 17 characters");
+  ctx.showField("Long name", "longName", longName, IotsaWebContext::Saved, "at most 63 characters");
+  ctx.showField("Universe of first port", "universe", firstUniverse, IotsaWebContext::Saved, "later ports get the next universes");
+  if (outputCount) ctx.showField("Index of first dimmer within universe", "firstIndex", outputFirstIndex, IotsaWebContext::Saved, "0 to 511");
+  if (inputCount) ctx.showField("Transmission IP address", "sendAddress", sendAddress.toString(), IotsaWebContext::Saved);
+}
+#endif // IOTSA_WITH_WEB
 
 String IotsaDMXMod::info() {
   String message = "<p>Built with Art-Net DMX module. See <a href=\"/dmx\">/dmx</a> to change the DMX parameters.</p>";
@@ -141,59 +136,30 @@ void IotsaDMXMod::setup() {
   fillPollReply();
 }
 
-bool IotsaDMXMod::getHandler(const char *path, JsonObject& reply) {
-  reply["shortName"] = shortName;
-  reply["longName"] = longName;
-  reply["universe"] = firstUniverse;
-  reply["firstIndex"] = outputFirstIndex;
-  reply["sendAddress"] = sendAddress.toString();
-  return true;
+void IotsaDMXMod::getHandler(IotsaApiContext& ctx) {
+  ctx.show("shortName", shortName);
+  ctx.show("longName", longName);
+  ctx.show("universe", firstUniverse);
+  ctx.show("firstIndex", outputFirstIndex);
+  ctx.show("sendAddress", sendAddress.toString());
 }
 
-bool IotsaDMXMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply, bool *changed) {
-  bool anyChanged = false;
-  JsonObject reqObj = request.as<JsonObject>();
-  if (reqObj["shortName"].is<String>()) {
-    shortName = reqObj["shortName"].as<String>();
-    anyChanged = true;
-  }
-  if (reqObj["longName"].is<String>()) {
-    longName = reqObj["longName"].as<String>();
-    anyChanged = true;
-  }
-  if (reqObj["universe"].is<int>()) {
-    firstUniverse = reqObj["universe"];
-    anyChanged = true;
-  }
-  if (reqObj["firstIndex"].is<int>()) {
-    outputFirstIndex = reqObj["firstIndex"];
-    anyChanged = true;
-  }
-  if (reqObj["sendAddress"].is<String>()) {
-    IPAddress newAddr;
-    if (newAddr.fromString(reqObj["sendAddress"].as<String>())) {
-      sendAddress = newAddr;
-      anyChanged = true;
-    }
-  }
-  if (anyChanged) {
-    configSave();
-    fillPollReply();
-  }
-  if ((anyChanged) && changed) *changed = true;
-  return true;
+void IotsaDMXMod::putHandler(IotsaApiContext& ctx) {
+  _args(ctx);
 }
 
 void IotsaDMXMod::lateSetup() {
-  name = "dmx";
   api.setup("dmx", true, true);
+  name = "dmx";
+  changesNeedRight("dmx");
   udp.begin(ARTNET_PORT);
 }
 
 void IotsaDMXMod::configLoad() {
   IotsaConfigFileLoad cf("/config/dmx.cfg");
-  cf.get("shortName", shortName, "iotsaDMXLedstrip");
-  cf.get("longName", longName, "iotsaDMXLedstrip");
+  // What DMX controllers see in the poll reply; by default the device's name.
+  cf.get("shortName", shortName, iotsaConfig.hostName.substring(0, sizeof(outPkt.pollReply.shortName)-1));
+  cf.get("longName", longName, iotsaConfig.hostName.substring(0, sizeof(outPkt.pollReply.longName)-1));
   cf.get("universe", firstUniverse, 0);
   cf.get("firstIndex", outputFirstIndex, 0);
   String addrStr;
@@ -341,11 +307,14 @@ void IotsaDMXMod::loop() {
       return;
     }
     bool anyChange = false;
-    int nValues = ntohs(inPkt.data.length);
+    // Our dimmers start at outputFirstIndex within the universe.
+    int nValues = ntohs(inPkt.data.length) - outputFirstIndex;
+    if (nValues > (int)sizeof(inPkt.data.data) - outputFirstIndex) nValues = sizeof(inPkt.data.data) - outputFirstIndex;
     if ((int)outputCount < nValues) nValues = outputCount;
     for(int i=0; i<nValues; i++) {
-      if (inPkt.data.data[i] != outputBuffer[i]) {
-        outputBuffer[i] = inPkt.data.data[i];
+      uint8_t value = inPkt.data.data[outputFirstIndex + i];
+      if (value != outputBuffer[i]) {
+        outputBuffer[i] = value;
         anyChange = true;
       }
     }

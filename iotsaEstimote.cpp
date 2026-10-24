@@ -74,43 +74,77 @@ static void _id2hex(const uint8_t *id, String& hex) {
   }
 }
 
-void
-IotsaEstimoteMod::webHandler() {
-  bool anyChanged = false;
-  if( api.webService->server->hasArg("Clear")) {
-    if (needsAuthentication()) return;
-    nKnownEstimote = nNewEstimote = 0;
-    if (estimotes) free(estimotes);
-    estimotes = NULL;
-    anyChanged = true;
-  }
-  if( api.webService->server->hasArg("new")) {
-    String id = api.webService->server->arg("new");
-    _hex2id(id, estimotes[nKnownEstimote].id);
-    nKnownEstimote++;
-    nNewEstimote = 0;
-    anyChanged = true;
-  }
-  if (anyChanged) configSave();
+void IotsaEstimoteMod::_clear() {
+  nKnownEstimote = nNewEstimote = 0;
+  if (estimotes) free(estimotes);
+  estimotes = NULL;
+}
 
-  String message = "<html><head><title>Estimote module</title></head><body><h1>Estimote module</h1>";
-  message += "<form method='get'><input type='submit' value='Reload'></form>";
-  message += "<h2>Known Estimotes</h2><ol>";
-  for (int i=0; i<nKnownEstimote; i++) {
+// The index of the estimote with this id among [from, to), or -1.
+int IotsaEstimoteMod::_find(const uint8_t *id, int from, int to) {
+  for (int i=from; i<to; i++) {
+    if (memcmp(id, estimotes[i].id, 8) == 0) return i;
+  }
+  return -1;
+}
+
+#ifdef IOTSA_WITH_WEB
+// Add (a newly seen estimote to the tracked ones, which become the next
+// sliders) and Clear (all of them): setting up for a show, which needs "dmx"
+// (lateSetup()).
+void IotsaEstimoteMod::formHandler_args(IotsaWebContext& ctx) {
+  if (ctx.argAction("add", IotsaContext::Saved)) {
     String id;
-    _id2hex(estimotes[i].id, id);
-    message += "<li>" + id + ", x=" + String(estimotes[i].x) + " y=" + String(estimotes[i].y) + " z=" + String(estimotes[i].z) + "</li>";
+    ctx.argPeek("add", id);
+    uint8_t idbuf[8];
+    _hex2id(id, idbuf);
+    int idx = _find(idbuf, nKnownEstimote, nKnownEstimote+nNewEstimote);
+    if (idx < 0) {
+      ctx.error(404, "Estimote " + id + " has not been seen.");
+      return;
+    }
+    // The new one moves to the end of the tracked ones.
+    struct Estimote tmp = estimotes[nKnownEstimote];
+    estimotes[nKnownEstimote] = estimotes[idx];
+    estimotes[idx] = tmp;
+    nKnownEstimote++;
+    nNewEstimote--;
   }
-  message += "</ol><form method='get'><input type='submit' name='Clear' value='Clear'></form>";
+  if (ctx.argConfirmedAction("clear")) {
+    _clear();
+    // A confirmed action counts as Transient: save it here.
+    configSave();
+    ctx.feedback("All estimotes removed.");
+  }
+}
 
-  message += "<h2>Unknown Estimotes</h2><ul>";
+void IotsaEstimoteMod::formHandler_fields(IotsaWebContext& ctx) {
+  if (ctx.includesEveryday()) {
+    ctx << "<p><a href='/estimote'>Reload</a></p>";
+    if (nKnownEstimote == 0) {
+      ctx << "<p>No estimotes tracked.</p>";
+      return;
+    }
+    String message = "<ol>";
+    for (int i=0; i<nKnownEstimote; i++) {
+      String id;
+      _id2hex(estimotes[i].id, id);
+      message += "<li>" + id + ", x=" + String(estimotes[i].x) + " y=" + String(estimotes[i].y) + " z=" + String(estimotes[i].z) + "</li>";
+    }
+    message += "</ol>";
+    ctx << message;
+    return;
+  }
+  ctx << "<h3>Newly seen estimotes</h3>";
+  if (nNewEstimote == 0) ctx << "<p>None.</p>";
   for (int i=nKnownEstimote; i<nKnownEstimote+nNewEstimote; i++) {
     String id;
     _id2hex(estimotes[i].id, id);
-    message += "<li>" + id + "<form method='get'><input type='hidden' name='new' value='" + id + "'><input type='submit' value='Add' name='add'></form></li>";
+    ctx.showButton("add", "Add " + id, IotsaContext::Saved, id.c_str());
   }
-  api.webService->server->send(200, "text/html", message);
+  if (nKnownEstimote) ctx.showConfirmedButton("clear", "Remove all tracked estimotes", IotsaContext::Saved);
 }
+#endif // IOTSA_WITH_WEB
 
 String IotsaEstimoteMod::info() {
   String message = "<p>Built with estimote module. See <a href=\"/estimote\">/estimote</a> to change devices and settings or <a href=\"/api/estimote\">/api/estimote</a> for REST interface.</p>";
@@ -130,9 +164,11 @@ void IotsaEstimoteMod::setup() {
   pBLEScan->setWindow(151);  // less or equal setInterval value
 }
 
-bool IotsaEstimoteMod::getHandler(const char *path, JsonObject& reply) {
-  JsonArray ids = reply["estimotes"].to<JsonArray>();
-  JsonArray newIds = reply["newEstimotes"].to<JsonArray>();
+// The configuration: the ids of the tracked estimotes, and of the newly seen
+// ones that can be added.
+void IotsaEstimoteMod::getHandler(IotsaApiContext& ctx) {
+  JsonArray ids = ctx.reply()["estimotes"].to<JsonArray>();
+  JsonArray newIds = ctx.reply()["newEstimotes"].to<JsonArray>();
   for (int i=0; i<nKnownEstimote+nNewEstimote; i++) {
     String id;
     _id2hex(estimotes[i].id, id);
@@ -142,37 +178,41 @@ bool IotsaEstimoteMod::getHandler(const char *path, JsonObject& reply) {
       newIds.add(id);
     }
   }
-  return true;
 }
 
-bool IotsaEstimoteMod::putHandler(const char *path, const JsonVariant& request, JsonObject& reply, bool *changed) {
-  bool anyChanged = false;
-  JsonObject reqObj = request.as<JsonObject>();
-  if (reqObj["estimotes"].is<JsonArray>()) {
-    JsonArray ids = reqObj["estimotes"];
-    if (estimotes) free(estimotes);
-    estimotes = NULL;
-    nKnownEstimote = nNewEstimote = 0;
-    nKnownEstimote = ids.size();
-    if (nKnownEstimote > 0) {
-      estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
-      for(int i=0; i<nKnownEstimote; i++) {
-        const String& id = ids[i];
-        _hex2id(id, estimotes[i].id);
-        estimotes[i].x = estimotes[i].y = estimotes[i].z = 0;
-        estimotes[i].seen = false;
-      }
-    }
-    anyChanged = true;
+// estimotes: the ids to track, replacing the list (the newly seen ones are
+// forgotten too).
+void IotsaEstimoteMod::putHandler(IotsaApiContext& ctx) {
+  if (!ctx.argAction("estimotes", IotsaContext::Saved)) return;
+  JsonVariant v = ctx.request()["estimotes"];
+  if (!v.is<JsonArray>()) {
+    ctx.error(400, "estimotes: a list of ids");
+    return;
   }
-  if (anyChanged) configSave();
-  if ((anyChanged) && changed) *changed = true;
-  return true;
+  JsonArray ids = v.as<JsonArray>();
+  for (JsonVariant id : ids) {
+    if (!id.is<const char *>() || strlen(id.as<const char *>()) != 16) {
+      ctx.error(400, "estimotes: ids of 16 hex digits");
+      return;
+    }
+  }
+  _clear();
+  if (ids.size() == 0) return;
+  estimotes = (struct Estimote *)calloc(ids.size(), sizeof(struct Estimote));
+  if (estimotes == NULL) {
+    ctx.error(500, "out of memory");
+    return;
+  }
+  nKnownEstimote = ids.size();
+  for (int i=0; i<nKnownEstimote; i++) {
+    _hex2id(ids[i].as<String>(), estimotes[i].id);
+  }
 }
 
 void IotsaEstimoteMod::lateSetup() {
   name = "estimote";
   api.setup("estimote", true, true);
+  changesNeedRight("dmx");
 }
 
 void IotsaEstimoteMod::configLoad() {
@@ -247,7 +287,7 @@ void IotsaEstimoteMod::_resetSensorsSeen() {
   }
 }
 
-void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
+void IotsaEstimoteMod::_sensorData(const uint8_t *id, int8_t x, int8_t y, int8_t z) {
   struct Estimote *ep = estimotes;
   int n = nKnownEstimote + nNewEstimote;
   while(n-- > 0) {
@@ -257,14 +297,16 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
       ep->y = y;
       ep->z = z;
       IFDEBUG IotsaSerial.printf("Estimote num=%d x=%d y=%d z=%d\n", (ep-estimotes), ep->x, ep->y, ep->z);
+      // Six sliders per tracked estimote; newly seen ones have none.
       int idx = ep-estimotes;
+      if (idx >= nKnownEstimote || 6*idx+5 >= (int)sizeof(sliderBuffer)) return;
       sliderBuffer[6*idx+0] = x > 0 ? x*2 : 0;
       sliderBuffer[6*idx+1] = x < 0 ? -x*2 : 0;
       sliderBuffer[6*idx+2] = y > 0 ? y*2 : 0;
       sliderBuffer[6*idx+3] = y < 0 ? -y*2 : 0;
       sliderBuffer[6*idx+4] = z > 0 ? z*2 : 0;
       sliderBuffer[6*idx+5] = z < 0 ? -z*2 : 0;
-      if (n < nKnownEstimote && dmx) {
+      if (dmx) {
         sendDMXat = millis() + BLESCAN_DURATION_AFTER_SUCCESS;
       }
       return;
@@ -272,17 +314,13 @@ void IotsaEstimoteMod::_sensorData(uint8_t *id, int8_t x, int8_t y, int8_t z) {
     ep++;
   }
   // A new Estimote we have not seen before.
-  nNewEstimote++;
-  n = nKnownEstimote + nNewEstimote;
-  if (n == 1) {
-    ep = (struct Estimote *)malloc(sizeof(struct Estimote));
-  } else {
-    ep = (struct Estimote *)realloc((void *)estimotes, n * sizeof(struct Estimote));
-  }
+  n = nKnownEstimote + nNewEstimote + 1;
+  ep = (struct Estimote *)realloc((void *)estimotes, n * sizeof(struct Estimote));
   if (ep == NULL) {
     IotsaSerial.println("out of memory");
     return;
   }
+  nNewEstimote++;
   estimotes = ep;
   ep = ep + (n-1);
   memcpy(ep->id, id, 8);
@@ -338,13 +376,16 @@ void IotsaEstimoteMod::onResult(const NimBLEAdvertisedDevice *advertisedDevice) 
     //IFDEBUG IotsaSerial.println("Too short");
     return;
   }
-  NearableAdvertisement *adv = (NearableAdvertisement *)manufacturerData;
-  if (adv->companyID != ID_ESTIMOTE) {
+  // This runs in the BLE task; the estimotes array belongs to the loop task
+  // (the web and REST handlers read it, _sensorData() reallocates it). So a
+  // copy of the advertisement goes to the loop (cwi-dis/iotsa#236).
+  NearableAdvertisement adv;
+  memcpy(&adv, manufacturerData, sizeof(adv));
+  if (adv.companyID != ID_ESTIMOTE) {
     //IFDEBUG IotsaSerial.println("Not estimote");
     return;
   }
-#if 0
-  IFDEBUG IotsaSerial.printf("Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", adv->nearableID[0], adv->nearableID[1], adv->nearableID[2], adv->nearableID[3], adv->nearableID[4], adv->nearableID[5], adv->nearableID[6], adv->nearableID[7], adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
-#endif
-  _sensorData(adv->nearableID, adv->xAccelleration, adv->yAccelleration, adv->zAccelleration);
+  IotsaApplication::postToLoop([this, adv]() {
+    _sensorData(adv.nearableID, adv.xAccelleration, adv.yAccelleration, adv.zAccelleration);
+  });
 }
