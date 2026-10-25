@@ -262,7 +262,7 @@ void IotsaDMXMod::loop() {
     size_t dataSize = sizeof(inPkt)-512+inputCount; 
     udp.write((uint8_t *)&inPkt, dataSize);
     udp.endPacket();
-    IFDEBUG IotsaSerial.printf("sent %d byte DMX packet to %s\n", dataSize, sendAddress.toString().c_str());
+    IOTSA_LOG_DEBUG("dmx", "sent %d byte DMX packet to %s", dataSize, sendAddress.toString().c_str());
     sendDMXPacket = false;
     // xxxjack should also send periodically
   }
@@ -278,7 +278,7 @@ void IotsaDMXMod::loop() {
   }
   if (packetSize > sizeof(inPkt)) packetSize = sizeof(inPkt);
   if (udp.read((char *)&inPkt, sizeof(inPkt)) != (int)packetSize) {
-    IFDEBUG IotsaSerial.println("Ignoring incomplete packet");
+    IOTSA_LOG_DEBUG("dmx", "ignoring incomplete packet");
 #ifndef UDP_FLUSH_IS_BROKEN
     udp.flush();
 #endif
@@ -288,10 +288,7 @@ void IotsaDMXMod::loop() {
   udp.flush();
 #endif
   if (strcmp(inPkt.ident, "Art-Net") != 0 || ntohs(inPkt.pollRequest.protocolVersion) != 14) {
-    IFDEBUG IotsaSerial.print("Ignoring unknown packet, hdr=");
-    IFDEBUG IotsaSerial.print(inPkt.ident);
-    IFDEBUG IotsaSerial.print(", version=");
-    IFDEBUG IotsaSerial.println(inPkt.pollRequest.protocolVersion);
+    IOTSA_LOG_DEBUG("dmx", "ignoring unknown packet, hdr=%.8s, version=%d", inPkt.ident, ntohs(inPkt.pollRequest.protocolVersion));
     return;
   }
   uint16_t opcode = inPkt.opcode;
@@ -303,7 +300,7 @@ void IotsaDMXMod::loop() {
       return;
     }
     if (outputBuffer == NULL || outputCount == 0 || dmxOutputHandler == NULL) {
-      IFDEBUG IotsaSerial.println("Ignore data, no output buffer/handler set");
+      IOTSA_LOG_DEBUG("dmx", "ignoring data, no output buffer/handler set");
       return;
     }
     bool anyChange = false;
@@ -319,18 +316,17 @@ void IotsaDMXMod::loop() {
       }
     }
     if (anyChange) {
-      IFDEBUG IotsaSerial.println("Data, and callback");
+      IOTSA_LOG_DEBUG("dmx", "data, and callback");
       dmxOutputHandler->dmxOutputChanged();
     }
   } else if (opcode == 0x2000) {
-    IFDEBUG IotsaSerial.println("Poll packet");
+    IOTSA_LOG_DEBUG("dmx", "poll packet");
     udp.beginPacket(udp.remoteIP(), 6454);
     udp.write((uint8_t *)&outPkt, sizeof(outPkt));
     udp.endPacket();
   } else if (opcode == 0x2100) {
-    IFDEBUG IotsaSerial.println("PollReply packet");
+    IOTSA_LOG_DEBUG("dmx", "pollReply packet");
   } else {
-    IFDEBUG IotsaSerial.print("Ignoring packet opcode=");
-    IFDEBUG IotsaSerial.println(opcode, HEX);
+    IOTSA_LOG_DEBUG("dmx", "ignoring packet opcode=0x%x", opcode);
   }
 }

@@ -228,7 +228,7 @@ void IotsaEstimoteMod::configLoad() {
   if (nKnownEstimote > 0) {
     estimotes = (struct Estimote *)malloc(nKnownEstimote*sizeof(struct Estimote));
     if (estimotes == NULL) {
-      IotsaSerial.println("out of memory");
+      IOTSA_LOG("estimote", "out of memory");
       return;
     }
     for(int i=0; i<nKnownEstimote; i++) {
@@ -296,7 +296,7 @@ void IotsaEstimoteMod::_sensorData(const uint8_t *id, int8_t x, int8_t y, int8_t
       ep->x = x;
       ep->y = y;
       ep->z = z;
-      IFDEBUG IotsaSerial.printf("Estimote num=%d x=%d y=%d z=%d\n", (ep-estimotes), ep->x, ep->y, ep->z);
+      IOTSA_LOG_DEBUG("estimote", "num=%d x=%d y=%d z=%d", (int)(ep-estimotes), ep->x, ep->y, ep->z);
       // Six sliders per tracked estimote; newly seen ones have none.
       int idx = ep-estimotes;
       if (idx >= nKnownEstimote || 6*idx+5 >= (int)sizeof(sliderBuffer)) return;
@@ -317,7 +317,7 @@ void IotsaEstimoteMod::_sensorData(const uint8_t *id, int8_t x, int8_t y, int8_t
   n = nKnownEstimote + nNewEstimote + 1;
   ep = (struct Estimote *)realloc((void *)estimotes, n * sizeof(struct Estimote));
   if (ep == NULL) {
-    IotsaSerial.println("out of memory");
+    IOTSA_LOG("estimote", "out of memory");
     return;
   }
   nNewEstimote++;
@@ -328,7 +328,7 @@ void IotsaEstimoteMod::_sensorData(const uint8_t *id, int8_t x, int8_t y, int8_t
   ep->y = y;
   ep->z = z;
   ep->seen = true;
-  IFDEBUG IotsaSerial.printf("New Estimote %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d\n", ep->id[0], ep->id[1], ep->id[2], ep->id[3], ep->id[4], ep->id[5], ep->id[6], ep->id[7], ep->x, ep->y, ep->z);
+  IOTSA_LOG("estimote", "new %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x x=%d y=%d z=%d", ep->id[0], ep->id[1], ep->id[2], ep->id[3], ep->id[4], ep->id[5], ep->id[6], ep->id[7], ep->x, ep->y, ep->z);
 }
 
 void IotsaEstimoteMod::loop() {
@@ -356,9 +356,8 @@ void IotsaEstimoteMod::loop() {
   if (!isScanning && millis() > startScanAt) {
     pBLEScan->clearResults();
     _resetSensorsSeen();
-    IFDEBUG IotsaSerial.print("SCAN ");
     isScanning = pBLEScan->start(BLESCAN_MAX_DURATION);
-    IFDEBUG IotsaSerial.println("started");
+    IOTSA_LOG_DEBUG("estimote", "scan started");
   }
 }
 
